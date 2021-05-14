@@ -11,7 +11,7 @@ They can employ more paramters at your leisure.
 import re as _re
 import pytz as _pytz
 import datetime as _dt
-from pymush.utils.misc import partial_match
+from pymush.utils import partial_match
 
 _TZ_DICT = {str(tz): _pytz.timezone(tz) for tz in _pytz.common_timezones}
 

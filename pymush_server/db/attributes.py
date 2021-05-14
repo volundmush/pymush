@@ -12,6 +12,8 @@ class Attribute:
 
 class AttributeManager:
 
+    __slots__ = ['owner', 'attributes', 'roots']
+
     def __init__(self, owner):
         self.owner = owner
         self.attributes: Dict[str, Attribute] = dict()
@@ -33,6 +35,10 @@ class AttributeManager:
         a = Attribute(name=s)
         self.attributes[s] = a
         return a
+
+
+class SysAttributeManager(AttributeManager):
+    pass
 
 
 @dataclass

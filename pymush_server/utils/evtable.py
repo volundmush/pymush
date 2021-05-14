@@ -119,7 +119,7 @@ appear on both sides of the table string.
 
 from textwrap import TextWrapper
 from copy import deepcopy, copy
-from pymush.utils.misc import is_iter
+from pymush.utils import is_iter
 from rich.text import Text
 
 _DEFAULT_WIDTH = 78

@@ -3,6 +3,7 @@ import socket
 import selectors
 from enum import IntEnum
 from typing import Optional, Union, List, Dict, Set
+from pymush.app import Service
 from .protocol import MudProtocol, MudTelnetHandler, MudWebSocketHandler, PROTOCOL_MAP, MudProtocolHandler
 
 
@@ -26,11 +27,11 @@ class MudConnection:
 class MudListener:
     stype = SocketType.LISTENER
 
-    __slots__ = ['manager', 'name', 'interface', 'port', 'protocol', 'ssl_context', 'socket']
+    __slots__ = ['service', 'name', 'interface', 'port', 'protocol', 'ssl_context', 'socket']
 
-    def __init__(self, manager: "MudNetManager", name: str, interface: str, port: int, protocol: MudProtocol,
+    def __init__(self, service: "NetService", name: str, interface: str, port: int, protocol: MudProtocol,
                  ssl_context: Optional[ssl.SSLContext] = None):
-        self.manager: "MudNetManager" = manager
+        self.service: "NetService" = service
         self.name: str = name
         self.interface: str = interface
         self.port: int = port
@@ -40,21 +41,14 @@ class MudListener:
         self.socket.setblocking(False)
 
 
-class MudNetManager:
+class NetService(Service):
+    __slots__ = ['app', 'ssl_contexts', 'listeners', 'listeners', 'mudconnections', 'interfaces', 'selector',
+                 'ready_listeners', 'ready_readers', 'ready_writers']
 
-    __slots__ = ['app', 'ssl_contexts', 'listeners', 'listeners', 'mudconnections', 'interfaces', 'selector', 'ready_listeners',
-                 'ready_readers', 'ready_writers']
-
-    def __init__(self, app):
-        self.app = app
-        self.ssl_contexts: Dict[str, ssl.SSLContext] = dict()
+    def __init__(self):
+        self.app.net = self
         self.listeners: Dict[str, MudListener] = dict()
         self.mudconnections: Dict[int, MudProtocolHandler] = dict()
-        self.interfaces: Dict[str, str] = {
-            "localhost":  "localhost",
-            "any": "",
-            "public": socket.gethostname()
-        }
         self.selector: selectors.DefaultSelector = selectors.DefaultSelector()
         self.ready_listeners: Set[MudListener] = set()
         self.ready_readers: Set[MudProtocolHandler] = set()
@@ -64,23 +58,17 @@ class MudNetManager:
                           ssl_context: Optional[str] = None):
         if name in self.listeners:
             raise ValueError(f"A Listener is already using name: {name}")
-        host = self.interfaces.get(interface, None)
-        if not host:
+        host = self.app.config.interfaces.get(interface, None)
+        if host is None:
             raise ValueError(f"Interface not registered: {interface}")
         if port < 0 or port > 65535:
             raise ValueError(f"Invalid port: {port}. Port must be number between 0 and 65535")
-        ssl = self.ssl_contexts.get(ssl_context, None)
+        ssl = self.app.config.tls_contexts.get(ssl_context, None)
         if ssl_context and not ssl:
             raise ValueError(f"SSL Context not registered: {ssl_context}")
         listener = MudListener(self, name, host, port, protocol, ssl_context=ssl)
         self.listeners[name] = listener
         self.selector.register(listener.socket, selectors.EVENT_READ, listener)
-
-    def register_interface(self, name, interface):
-        self.interfaces[name] = interface
-
-    def register_ssl(self, name, pem_path):
-        pass
 
     def poll(self):
         self.ready_listeners.clear()
@@ -123,3 +111,22 @@ class MudNetManager:
     def read_bytes(self):
         for proto in self.ready_readers:
             proto.read_from_socket()
+
+    def setup(self):
+        for key, data in self.app.config.listeners.items():
+            self.register_listener(key, data["interface"], data["port"], MudProtocol(data["protocol"]),
+                                   data.get('ssl', None))
+
+    def update(self, delta: float):
+        self.poll()
+        if self.ready_listeners:
+            self.accept_connections()
+
+        if self.ready_readers:
+            self.read_bytes()
+
+        if self.ready_writers:
+            self.write_bytes()
+
+        for proto in self.mudconnections.values():
+            proto.health_check()

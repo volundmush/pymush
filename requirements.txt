@@ -4,3 +4,5 @@ ujson
 passlib
 argon2_cffi
 pytz
+setproctitle
+rich

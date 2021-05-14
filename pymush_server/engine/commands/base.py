@@ -1,5 +1,5 @@
 import re
-from pymush.utils import formatter as fmt
+from pymush_server.utils import formatter as fmt
 
 
 class CommandException(Exception):

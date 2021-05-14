@@ -1,7 +1,7 @@
 import re
 import hashlib
 from collections import defaultdict
-from pymush.utils import partial_match
+from pymush_server.utils import partial_match
 
 
 class FlatLine:
