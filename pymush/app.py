@@ -146,15 +146,18 @@ class Application:
     def after_loop(self, delta: float):
         pass
 
+    async def async_enter(self):
+        await self.async_setup()
+        a_services = [service.async_run() for service in self.services.values()]
+        await asyncio.gather(self.async_main_task(), self.async_run_loop(), *a_services)
+
     async def async_setup(self):
         for service in sorted(self.services.values(), key=lambda s: getattr(s, 'load_order', 0)):
             await service.async_setup()
 
-    def async_start(self):
+    def start_async(self):
         self.running = True
-        a_services = [service.async_run() for service in self.services.values()]
-        to_do = asyncio.gather(self.async_main_task(), self.async_run_loop(), *a_services)
-        asyncio.run(to_do, debug=True)
+        asyncio.run(self.async_enter(), debug=True)
 
     async def async_main_task(self):
         pass

@@ -16,22 +16,6 @@ class LinkService(Service):
         self.interface: Optional[str] = None
         self.port: int = 0
 
-    def close_link(self):
-        if not self.portal:
-            return
-        self.selector.unregister(self.portal.socket)
-        self.portal.close()
-        self.portal = None
-
-    def connect_link(self):
-        if self.portal:
-            self.close_link()
-        try:
-            sock = socket.create_connection((self.interface, self.port))
-            self.portal = LinkProtocol(sock, self.interface)
-            self.selector.register(sock, selectors.EVENT_READ + selectors.EVENT_WRITE, self.portal)
-        except Exception as e:
-            pass
 
     def setup(self):
         self.interface = self.app.config.interfaces.get(self.app.config.link["interface"], None)
@@ -41,26 +25,3 @@ class LinkService(Service):
         if port < 0 or port > 65535:
             raise ValueError(f"Invalid port: {port}. Port must be number between 0 and 65535")
         self.port = port
-
-    def update(self, delta: float):
-        if not self.portal:
-            self.connect_link()
-        if not self.portal:
-            return
-
-        self.portal.out_events.extend(self.out_events)
-        self.out_events.clear()
-
-        for key, events in self.selector.select(timeout=-1):
-            if events & selectors.EVENT_READ:
-                key.data.read_bytes()
-                if key.data.closed:
-                    self.close_link()
-                if key.data.in_events:
-                    self.in_events.extend(key.data.in_events)
-                    key.data.in_events.clear()
-            if events & selectors.EVENT_WRITE:
-                key.data.write_ready = True
-
-        if self.portal and self.portal.write_ready:
-            self.portal.send_bytes()

@@ -1,33 +1,21 @@
 import ssl
-import socket
-import selectors
-from enum import IntEnum
+import asyncio
 from typing import Optional, Union, List, Dict, Set
 from pymush.app import Service
-from .protocol import MudProtocol, MudTelnetHandler, MudWebSocketHandler, PROTOCOL_MAP, MudProtocolHandler
+import websockets
+from .conn import MudConnection
+from .telnet import TelnetMudConnection
+from .websocket import WebSocketConnection
+from enum import IntEnum
 
 
-class SocketType(IntEnum):
-    LISTENER = 0
-    CONNECTION = 1
-
-
-class MudConnection:
-    stype = SocketType.CONNECTION
-
-    def __init__(self, sock: socket.socket, addr, ssl_context: Optional[ssl.SSLContext]):
-        self.socket: Union[socket.socket, ssl.SSLSocket] = sock if not ssl_context else \
-            ssl_context.wrap_socket(sock, server_side=True)
-        self.addr = addr
-        self.ssl_context: Optional[ssl.SSLContext] = ssl_context
-        self.inbox: bytearray = bytearray()
-        self.outbox: bytearray = bytearray()
+class MudProtocol(IntEnum):
+    TELNET = 0
+    WEBSOCKET = 1
 
 
 class MudListener:
-    stype = SocketType.LISTENER
-
-    __slots__ = ['service', 'name', 'interface', 'port', 'protocol', 'ssl_context', 'socket']
+    __slots__ = ['service', 'name', 'interface', 'port', 'protocol', 'ssl_context', 'server']
 
     def __init__(self, service: "NetService", name: str, interface: str, port: int, protocol: MudProtocol,
                  ssl_context: Optional[ssl.SSLContext] = None):
@@ -37,8 +25,32 @@ class MudListener:
         self.port: int = port
         self.protocol: MudProtocol = protocol
         self.ssl_context: Optional[ssl.SSLContext] = ssl_context
-        self.socket = socket.create_server((interface, port))
-        self.socket.setblocking(False)
+        self.server = None
+
+    async def async_setup(self):
+        if self.protocol == MudProtocol.TELNET:
+            loop = asyncio.get_event_loop()
+            self.server = await loop.create_server(self.accept_telnet, self.interface, self.port,
+                                             ssl=self.ssl_context, start_serving=False)
+        elif self.protocol == MudProtocol.WEBSOCKET:
+            self.server = websockets.serve(self.accept_websocket, self.interface, self.port,
+                                           ssl=self.ssl_context)
+
+    def accept_telnet(self):
+        conn = TelnetMudConnection(self)
+        self.service.mudconnections[conn.conn_id] = conn
+        return conn
+
+    def accept_websocket(self, ws, path):
+        conn = WebSocketConnection(self, ws, path)
+        self.service.mudconnections[conn.conn_id] = conn
+        return conn.run()
+
+    async def run(self):
+        if self.protocol == MudProtocol.TELNET:
+            await self.server.serve_forever()
+        elif self.protocol == MudProtocol.WEBSOCKET:
+            await self.server
 
 
 class NetService(Service):
@@ -48,11 +60,9 @@ class NetService(Service):
     def __init__(self):
         self.app.net = self
         self.listeners: Dict[str, MudListener] = dict()
-        self.mudconnections: Dict[int, MudProtocolHandler] = dict()
-        self.selector: selectors.DefaultSelector = selectors.DefaultSelector()
-        self.ready_listeners: Set[MudListener] = set()
-        self.ready_readers: Set[MudProtocolHandler] = set()
-        self.ready_writers: Set[MudProtocolHandler] = set()
+        self.mudconnections: Dict[str, MudConnection] = dict()
+        self.in_events: Optional[asyncio.Queue] = None
+        self.out_events: Optional[asyncio.Queue] = None
 
     def register_listener(self, name: str, interface: str, port: int, protocol: MudProtocol,
                           ssl_context: Optional[str] = None):
@@ -68,67 +78,21 @@ class NetService(Service):
             raise ValueError(f"SSL Context not registered: {ssl_context}")
         listener = MudListener(self, name, host, port, protocol, ssl_context=ssl)
         self.listeners[name] = listener
-        self.selector.register(listener.socket, selectors.EVENT_READ, listener)
-
-    def poll(self):
-        self.ready_listeners.clear()
-        self.ready_readers.clear()
-        # ready writers are not cleared because sometimes they're ready to write but have no data waiting.
-
-        for key, events in self.selector.select(timeout=-1):
-            if key.data.stype == SocketType.LISTENER:
-                self.ready_listeners.add(key.data)
-            elif key.data.stype == SocketType.CONNECTION:
-                if key.events & selectors.EVENT_READ:
-                    self.ready_readers.add(key.data)
-                if key.events & selectors.EVENT_WRITE:
-                    self.ready_writers.add(key.data)
-
-    def accept_connections(self):
-        for listener in self.ready_listeners:
-            try:
-                while True:
-                    sock, addr = listener.socket.accept()
-                    fd = sock.fileno()
-                    sock.setblocking(False)
-                    conn = MudConnection(sock, addr, listener.ssl_context)
-                    proto = PROTOCOL_MAP[listener.protocol](conn, str(fd))
-                    self.mudconnections[fd] = proto
-                    proto.start()
-                    self.selector.register(sock, selectors.EVENT_READ + selectors.EVENT_WRITE, proto)
-            except BlockingIOError as e:
-                pass
-
-    def write_bytes(self):
-        written = set()
-        for proto in self.ready_writers:
-            if not proto.conn.outbox:
-                continue
-            if proto.write_to_socket():
-                written.add(proto)
-        self.ready_writers -= written
-
-    def read_bytes(self):
-        for proto in self.ready_readers:
-            proto.read_from_socket()
 
     def setup(self):
-        for key, data in self.app.config.listeners.items():
-            self.register_listener(key, data["interface"], data["port"], MudProtocol(data["protocol"]),
-                                   data.get('ssl', None))
+        for name, config in self.app.config.listeners.items():
+            try:
+                protocol = MudProtocol(config.get("protocol", -1))
+            except ValueError:
+                raise ValueError(f"Must provide a valid protocol for {name}!")
+            self.register_listener(name, config.get("interface", None), config.get("port", -1), protocol, config.get("ssl", None))
 
-    def update(self, delta: float):
-        self.poll()
-        if self.ready_listeners:
-            self.accept_connections()
+    async def async_setup(self):
+        self.in_events = asyncio.Queue()
+        self.out_events = asyncio.Queue()
+        for listener in self.listeners.values():
+            await listener.async_setup()
 
-        if self.ready_readers:
-            self.read_bytes()
-
-        if self.ready_writers:
-            self.write_bytes()
-
-
-
-        for proto in self.mudconnections.values():
-            proto.health_check()
+    async def async_run(self):
+        gathered = asyncio.gather(*[l.run() for l in self.listeners.values()])
+        await gathered

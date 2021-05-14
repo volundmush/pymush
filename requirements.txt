@@ -6,3 +6,5 @@ argon2_cffi
 pytz
 setproctitle
 rich
+websockets
+uvloop

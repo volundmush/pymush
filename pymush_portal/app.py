@@ -6,6 +6,7 @@ from .link import LinkService
 
 
 class Application(BaseApplication):
+    run_async = True
 
     def __init__(self, config: Config):
         super().__init__(config)

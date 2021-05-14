@@ -44,7 +44,10 @@ def main():
         # Step 3: Load application from core.
         app_core.setup()
         # Step 4: Start everything up and run forever.
-        app_core.start()
+        if app_core.run_async:
+            app_core.start_async()
+        else:
+            app_core.start()
     except Exception as e:
         traceback.print_exc(file=sys.stdout)
         print(f"UNHANDLED EXCEPTION!")
