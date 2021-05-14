@@ -24,19 +24,16 @@ class LinkService(Service):
         self.portal = None
 
     def connect_link(self):
-        print("Attempting to connect...")
         if self.portal:
             self.close_link()
         try:
             sock = socket.create_connection((self.interface, self.port))
-            print(f"SERVER LINKED TO PORTAL!")
             self.portal = LinkProtocol(sock, self.interface)
             self.selector.register(sock, selectors.EVENT_READ + selectors.EVENT_WRITE, self.portal)
         except Exception as e:
             pass
 
     def setup(self):
-        print("is this happening?", flush=True)
         self.interface = self.app.config.interfaces.get(self.app.config.link["interface"], None)
         if self.interface is None:
             raise ValueError("Server must have a valid link interface!")

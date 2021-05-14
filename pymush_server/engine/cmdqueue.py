@@ -5,7 +5,7 @@ from .commands.base import CommandException
 import traceback
 from typing import Optional, Union, List, Set
 from enum import IntEnum
-from pymush_server.protocol import MudProtocolHandler
+from pymush_server.conn import Connection
 from pymush_server.db.gameobject import GameObject, GameSession
 
 
@@ -26,7 +26,7 @@ class QueueEntry:
         self.caller: Optional[GameObject] = None
         self.spoof: Optional[GameObject] = None
         self.actions: str = ""
-        self.connection: Optional[MudProtocolHandler] = None
+        self.connection: Optional[Connection] = None
         self.parser = None
         self.semaphore_obj = None
         self.inplace = None
@@ -41,14 +41,14 @@ class QueueEntry:
         self.created: Optional[float] = None
 
     @classmethod
-    def from_login(cls, conn: MudProtocolHandler, command: str) -> "QueueEntry":
+    def from_login(cls, conn: Connection, command: str) -> "QueueEntry":
         entry = cls(QueueEntryType.LOGIN)
         entry.connection = conn
         entry.actions = command
         return entry
 
     @classmethod
-    def from_user(cls, user: GameObject, command: str, connection: Optional[MudProtocolHandler] = None) -> "QueueEntry":
+    def from_user(cls, user: GameObject, command: str, connection: Optional[Connection] = None) -> "QueueEntry":
         entry = cls(QueueEntryType.USER)
         if connection:
             entry.connection = connection
@@ -60,7 +60,7 @@ class QueueEntry:
         return entry
 
     @classmethod
-    def from_session(cls, sess: GameSession, command: str, connection: Optional[MudProtocolHandler] = None) -> "QueueEntry":
+    def from_session(cls, sess: GameSession, command: str, connection: Optional[Connection] = None) -> "QueueEntry":
         entry = cls(QueueEntryType.SESSION)
         if connection:
             entry.connection = connection

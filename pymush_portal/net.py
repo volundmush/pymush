@@ -92,7 +92,7 @@ class NetService(Service):
                     fd = sock.fileno()
                     sock.setblocking(False)
                     conn = MudConnection(sock, addr, listener.ssl_context)
-                    proto = PROTOCOL_MAP[listener.protocol](conn, fd)
+                    proto = PROTOCOL_MAP[listener.protocol](conn, str(fd))
                     self.mudconnections[fd] = proto
                     proto.start()
                     self.selector.register(sock, selectors.EVENT_READ + selectors.EVENT_WRITE, proto)
@@ -127,6 +127,8 @@ class NetService(Service):
 
         if self.ready_writers:
             self.write_bytes()
+
+
 
         for proto in self.mudconnections.values():
             proto.health_check()

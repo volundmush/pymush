@@ -46,7 +46,6 @@ class LinkService(Service):
         try:
             while True:
                 sock, addr = self.listener.accept()
-                print(f"PORTAL GOT A LINK: {addr}")
                 sock.setblocking(False)
                 if self.server:
                     self.close_link()
@@ -69,3 +68,8 @@ class LinkService(Service):
     def close_link(self):
         self.server.close()
         self.server = None
+
+    def update(self, delta: float):
+        self.poll()
+        if self.server and self.server.write_ready:
+            self.server.send_bytes()

@@ -10,12 +10,13 @@ class MudProtocolHandler:
 
     __slots__ = ['out_events', 'in_events', "conn_id", "conn", "created", "details"]
 
-    def __init__(self, conn: "MudConnection", conn_id: int):
-        self.conn_id = conn_id
+    def __init__(self, conn: "MudConnection", conn_id: str):
+        self.conn_id: str = conn_id
         self.conn = conn
         self.out_events: List[ConnectionOutMessage] = list()
         self.in_events: List[ConnectionInMessage] = list()
         self.details = ConnectionDetails()
+        self.details.client_id = self.conn_id
         self.created = time.time()
 
     def start(self):
@@ -89,9 +90,11 @@ class MudTelnetHandler(MudProtocolHandler):
             self.started = True
         if self.started:
             if self.telnet_pending_events:
+                self.in_events.append(ConnectionInMessage(ConnectionInMessageType.READY, self.conn_id, self.details))
+                if self.details.mssp:
+                    self.in_events.append(ConnectionInMessage(ConnectionInMessageType.REQSTATUS, self.conn_id, None))
                 self.telnet_in_events.extend(self.telnet_pending_events)
                 self.telnet_pending_events.clear()
-                self.in_events.append(ConnectionInMessage(ConnectionInMessageType.READY, None))
                 self.process_telnet_events()
 
     def telnet_changed(self, data: Dict):
@@ -129,11 +132,11 @@ class MudTelnetHandler(MudProtocolHandler):
         for ev in self.telnet_in_events:
             msg = None
             if ev.msg_type == TelnetInMessageType.LINE:
-                msg = ConnectionInMessage(ConnectionInMessageType.LINE, ev.data)
+                msg = ConnectionInMessage(ConnectionInMessageType.LINE, self.conn_id, ev.data)
             elif ev.msg_type == TelnetInMessageType.GMCP:
                 pass
             elif ev.msg_type == TelnetInMessageType.MSSP:
-                msg = ConnectionInMessage(ConnectionInMessageType.REQSTATUS, ev.data)
+                msg = ConnectionInMessage(ConnectionInMessageType.REQSTATUS, self.conn_id, ev.data)
             if msg:
                 self.in_events.append(msg)
         self.telnet_in_events.clear()
@@ -148,6 +151,9 @@ class MudTelnetHandler(MudProtocolHandler):
             changed = self.telnet.process_input_message(frame, self.conn.outbox, events_buffer)
             if changed:
                 self.telnet_changed(changed)
+                if self.started:
+                    self.in_events.append(ConnectionInMessage(ConnectionInMessageType.UPDATE, self.conn_id,
+                                                              self.details))
         if self.started:
             self.process_telnet_events()
 

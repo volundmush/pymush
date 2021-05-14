@@ -54,6 +54,7 @@ class ConnectionInMessageType(IntEnum):
     READY = 3
     REQSTATUS = 4
     DISCONNECT = 5
+    UPDATE = 6
 
 
 @dataclass

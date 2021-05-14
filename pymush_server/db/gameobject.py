@@ -1,7 +1,7 @@
 import sys
 from typing import Union, Set, Optional, List, Dict
-from from pymush.utils import lazy_property
-from pymush_server.protocol import MudProtocolHandler
+from pymush.utils import lazy_property
+from pymush_server.conn import Connection
 from . attributes import AttributeHandler
 from mudtelnet.mudtelnet import TelnetInMessage, TelnetInMessageType
 from mudtelnet.mudtelnet import TelnetOutMessage, TelnetOutMessageType
@@ -14,7 +14,7 @@ class GameSession:
         self.user: "GameObject" = user
         self.character: "GameObject" = character
         self.puppet: "GameObject" = character
-        self.connections: Set[MudProtocolHandler] = set()
+        self.connections: Set[Connection] = set()
         self.in_events: List[TelnetInMessage] = list()
         self.out_events: List[TelnetOutMessage] = list()
 
