@@ -2,11 +2,14 @@ import ssl
 import logging
 import socket
 import time
-
+import asyncio
+import uvloop
 from collections import defaultdict
 from pymush.utils import import_from_module
 from logging.handlers import TimedRotatingFileHandler
 from typing import List, Set, Union, Optional, Dict
+
+uvloop.install()
 
 
 class BaseConfig:
@@ -104,6 +107,7 @@ class LauncherConfig:
 
 
 class Application:
+    run_async = False
 
     def __init__(self, config: BaseConfig):
         self.config: BaseConfig = config
@@ -111,6 +115,8 @@ class Application:
         self.services: Dict[str, Service] = dict()
         self.services_update: List[Service] = list()
         self.running: bool = True
+        self.interval = self.config.interval
+        self.delta = self.interval
 
     def setup(self):
         found_classes = list()
@@ -140,32 +146,62 @@ class Application:
     def after_loop(self, delta: float):
         pass
 
-    def start(self):
-        interval = self.config.interval
-        delta = interval
+    async def async_setup(self):
+        for service in sorted(self.services.values(), key=lambda s: getattr(s, 'load_order', 0)):
+            await service.async_setup()
 
+    def async_start(self):
+        self.running = True
+        a_services = [service.async_run() for service in self.services.values()]
+        to_do = asyncio.gather(self.async_main_task(), self.async_run_loop(), *a_services)
+        asyncio.run(to_do, debug=True)
+
+    async def async_main_task(self):
+        pass
+
+    async def async_run_loop(self):
+        while self.running:
+            self.run_time_loop()
+
+            if self.interval > self.delta:
+                await asyncio.sleep(self.interval - self.delta)
+            else:
+                await asyncio.sleep(0)
+
+    def start(self):
         self.running = True
 
         while self.running:
-            now = time.time()
-            self.before_loop(delta)
-            for s in self.services_update:
-                s.update(delta)
+            self.run_loop()
 
-            after = time.time()
-            delta = after - now
+    def run_time_loop(self):
+        now = time.time()
+        self.run_loop_once(self.delta)
+        after = time.time()
+        self.delta = after - now
 
-            if interval > delta:
-                time.sleep(interval - delta)
-            else:
-                time.sleep(0)
+    def run_loop(self):
+        self.run_time_loop()
 
+        if self.interval > self.delta:
+            time.sleep(self.interval - self.delta)
+        else:
+            time.sleep(0)
+
+    def run_loop_once(self, delta: float):
+        self.before_loop(self.delta)
+        for s in self.services_update:
+            s.update(self.delta)
+        self.after_loop(self.delta)
 
 class Service:
     name = None
     init_order = 0
     setup_order = 0
     update_order = 0
+
+    async def async_setup(self):
+        pass
 
     def setup(self):
         pass
@@ -175,3 +211,7 @@ class Service:
 
     def update(self, delta: float):
         pass
+
+    async def async_run(self):
+        while True:
+            await asyncio.sleep(5)
