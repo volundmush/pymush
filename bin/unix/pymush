@@ -1,5 +1,17 @@
-#!/usr/bin/env python3.8
+#!/usr/bin/env python3
+
+import pymush
+import os
+from athanor.launcher import AthanorLauncher
+
+
+class PyMUSHLauncher(AthanorLauncher):
+    name = "PyMUSH"
+    root = os.path.abspath(os.path.dirname(pymush.__file__))
+    game_template = os.path.abspath(
+        os.path.join(os.path.abspath(os.path.dirname(pymush.__file__)), 'game_template'))
+
 
 if __name__ == "__main__":
-    from pymush.launcher import main
-    main()
+    launcher = PyMUSHLauncher()
+    launcher.run()

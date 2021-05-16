@@ -1,10 +1,5 @@
-mudtelnet
 mudstring
-ujson
+rich
 passlib
 argon2_cffi
 pytz
-setproctitle
-rich
-websockets
-uvloop
