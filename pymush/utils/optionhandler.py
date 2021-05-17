@@ -1,4 +1,4 @@
-from from pymush.utils import partial_match
+from athanor.utils import partial_match
 
 _GA = object.__getattribute__
 _SA = object.__setattr__

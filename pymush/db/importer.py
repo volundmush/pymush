@@ -1,5 +1,5 @@
 from . flatfile import PennDB
-from pymush_server.utils import partial_match
+from athanor_server.utils import partial_match
 
 
 class VolDB(PennDB):

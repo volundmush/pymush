@@ -2,13 +2,13 @@ import re
 import sys
 import time
 import traceback
-from from pymush.utils import partial_match
+from athanor.utils import partial_match
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
 from rich.text import Text
 
-from pymush_server.db.importer import Importer
-from pymush_server.db.flatfile import check_password
-from pymush_server.utils import formatter as fmt
+from pymush.db.importer import Importer
+from pymush.db.flatfile import check_password
+from pymush.utils import formatter as fmt
 from . help import HelpCommand
 
 

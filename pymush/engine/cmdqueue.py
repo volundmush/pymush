@@ -5,8 +5,8 @@ from .commands.base import CommandException
 import traceback
 from typing import Optional, Union, List, Set
 from enum import IntEnum
-from pymush_server.conn import Connection
-from pymush_server.db.gameobject import GameObject, GameSession
+from athanor_server.conn import Connection
+from pymush.db.gameobject import GameObject, GameSession
 
 
 class QueueEntryType(IntEnum):

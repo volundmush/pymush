@@ -4,7 +4,6 @@ from setuptools import setup, find_packages
 
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
-VERSION_PATH = os.path.join("pymush", "VERSION.txt")
 OS_WINDOWS = os.name == "nt"
 
 
@@ -21,32 +20,6 @@ def get_requirements():
         if line:
             reqs.append(line)
     return reqs
-
-
-def get_version():
-    """
-    When updating the PyMUSH package for release, remember to increment the
-    version number in pymush/VERSION.txt
-    """
-    return open(VERSION_PATH).read().strip()
-
-
-def package_data():
-    """
-    By default, the distribution tools ignore all non-python files.
-
-    Make sure we get everything.
-    """
-    file_set = []
-    for d in ("pymush", "pymush_portal", "pymush_server"):
-        for root, dirs, files in os.walk(d):
-            for f in files:
-                if ".git" in f.split(os.path.normpath(os.path.join(root, f))):
-                    # Prevent the repo from being added.
-                    continue
-                file_name = os.path.relpath(os.path.join(root, f), d)
-                file_set.append(file_name)
-    return file_set
 
 def get_scripts():
     """
@@ -65,7 +38,7 @@ def get_scripts():
 # setup the package
 setup(
     name="pymush",
-    version=get_version(),
+    version="0.0.1",
     author="Volund",
     maintainer="Volund",
     url="https://github.com/volundmush/pymush",
@@ -74,10 +47,8 @@ setup(
     long_description="""
     
     """,
-    long_description_content_type="text/markdown",
-    packages=find_packages(),
-   # install_requires=get_requirements(),
-    package_data={"": package_data()},
+    install_requires=get_requirements(),
+    packages=["pymush"],
     zip_safe=False,
     scripts=get_scripts(),
     classifiers=[

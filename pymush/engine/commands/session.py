@@ -1,5 +1,5 @@
 from . base import MushCommand, CommandException, PythonCommandMatcher, BaseCommandMatcher, Command
-from pymush_server.utils import formatter as fmt
+from pymush.utils import formatter as fmt
 import re
 
 

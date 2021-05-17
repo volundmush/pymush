@@ -1,10 +1,10 @@
 import sys
 from typing import Union, Set, Optional, List, Dict
-from pymush.utils import lazy_property
-from pymush_server.conn import Connection
+from athanor.utils import lazy_property
+from athanor_server.conn import Connection
 from . attributes import AttributeHandler
-from mudtelnet.mudtelnet import TelnetInMessage, TelnetInMessageType
-from mudtelnet.mudtelnet import TelnetOutMessage, TelnetOutMessageType
+from mudtelnet import TelnetInMessage, TelnetInMessageType
+from mudtelnet import TelnetOutMessage, TelnetOutMessageType
 
 
 class GameSession:
