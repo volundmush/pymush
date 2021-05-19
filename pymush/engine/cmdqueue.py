@@ -7,6 +7,7 @@ from typing import Optional, Union, List, Set
 from enum import IntEnum
 from athanor_server.conn import Connection
 from pymush.db.gameobject import GameObject, GameSession
+import asyncio
 
 
 class QueueEntryType(IntEnum):
@@ -114,7 +115,7 @@ class QueueEntry:
                 yield result
 
     def execute(self):
-        self.start_timer = time.clock_gettime(time.CLOCK_PROCESS_CPUTIME_ID)
+        self.start_timer = time.time()
         if self.type == QueueEntryType.LOGIN:
             self.execute_login_actions()
         elif self.type == QueueEntryType.USER:
@@ -142,10 +143,10 @@ class CmdQueue:
         self.core = core
         self.queue_data: OrderedDict[int, QueueEntry] = OrderedDict()
         self.wait_queue: Set[QueueEntry] = set()
-        self.queue: List[int] = list()
+        self.queue = asyncio.PriorityQueue()
         self.pid: int = 0
 
-    def push(self, entry: QueueEntry):
+    def push(self, entry: QueueEntry, priority: int = 100):
         self.pid += 1
         entry.pid = self.pid
         self.queue_data[self.pid] = entry
@@ -153,23 +154,27 @@ class CmdQueue:
         if entry.wait:
             self.wait_queue.add(entry)
         else:
-            self.queue.append(self.pid)
-
-    def execute(self):
-        if self.queue:
-            try:
-                pid = self.queue.pop(0)
-                if (entry := self.queue_data.pop(pid, None)):
-                    entry.execute()
-            except Exception as e:
-                print(f"Oops, CmdQueue encountered Exception: {str(e)}")
+            self.queue.put_nowait((priority, self.pid))
 
     def queue_elapsed(self):
         if self.wait_queue:
             elapsed = set()
-            current = time.clock_gettime(time.CLOCK_PROCESS_CPUTIME_ID)
+            current = time.time()
             for entry in self.wait_queue:
                 if (current - entry.created) > entry.wait:
-                    self.queue.insert(0, entry.pid)
+                    self.queue.put_nowait((50, entry.pid))
                     elapsed.add(entry)
             self.wait_queue -= elapsed
+
+    async def run(self):
+        while True:
+            self.queue_elapsed()
+            if self.queue_data:
+                priority, pid = await self.queue.get()
+                try:
+                    if (entry := self.queue_data.pop(pid, None)):
+                        entry.execute()
+                except Exception as e:
+                    print(f"Oops, CmdQueue encountered Exception: {str(e)}")
+            else:
+                await asyncio.sleep(0.05)

@@ -1,22 +1,21 @@
 import sys
-from typing import Union, Set, Optional, List, Dict
+from typing import Union, Set, Optional, List, Dict, Tuple
 from athanor.utils import lazy_property
-from athanor_server.conn import Connection
-from . attributes import AttributeHandler
-from mudtelnet import TelnetInMessage, TelnetInMessageType
-from mudtelnet import TelnetOutMessage, TelnetOutMessageType
+from ..conn import Connection
+from .attributes import AttributeHandler
+from athanor.shared import ConnectionOutMessage, ConnectionOutMessageType, ConnectionInMessageType, ConnectionInMessage
 
 
 class GameSession:
 
-    def __init__(self, sid: int, user: "GameObject", character: "GameObject"):
+    def __init__(self, sid: int, user: "User", character: "GameObject"):
         self.sid: int = sid
-        self.user: "GameObject" = user
+        self.user: "User" = user
         self.character: "GameObject" = character
         self.puppet: "GameObject" = character
         self.connections: Set[Connection] = set()
-        self.in_events: List[TelnetInMessage] = list()
-        self.out_events: List[TelnetOutMessage] = list()
+        self.in_events: List[ConnectionInMessage] = list()
+        self.out_events: List[ConnectionOutMessage] = list()
 
 
 class NameSpace:
@@ -30,23 +29,44 @@ class NameSpace:
         return dict()
 
 
+class Inventory:
+    pass
+
+
 class GameObject:
     type_name = None
-    type_abbr = None
     type_ancestor: Optional["GameObject"] = None
 
-    def __init__(self, dbref: int, name: str):
+    __slots__ = ["service", "dbid", "dbref", "name", "parent", "parent_of", "home", "home_of", "db_quota", "cpu_quota",
+                 "zone", "zone_of", "owner", "owner_of", "namespaces", "namespace", "session",
+                 "attributes", "sys_attributes", "location", "contents", "aliases", "created", "modified"]
+
+    def __init__(self, service: "GameService", dbref: int, name: str, owner: "User"):
+        self.service = service
         self.dbid = dbref
         self.dbref = f"#{dbref}"
+        self.created: int = 0
+        self.modified: int = 0
         self.name = sys.intern(name)
-        self.children: Set[GameObject] = set()
+        self.aliases: List[str] = list()
+        self.owner: "User" = owner
         self.parent: Optional[GameObject] = None
+        self.parent_of: Set[GameObject] = set()
+        self.home: Optional[GameObject] = None
+        self.home_of: Set[GameObject] = set()
+        self.zone: Optional[GameObject] = None
+        self.zone_of: Set[GameObject] = set()
+        self.owner: Optional[GameObject] = None
+        self.owner_of: Set[GameObject] = set()
         self.namespaces: Dict[str, NameSpace] = dict()
-        self.sessions: Set["GameSession"] = set()
-
-    @lazy_property
-    def attributes(self):
-        return AttributeHandler(self)
+        self.namespace: Optional[Tuple[GameObject, str]] = None
+        self.session: Optional["GameSession"] = None
+        self.attributes = AttributeHandler(self, self.service.attributes)
+        self.sys_attributes = AttributeHandler(self, self.service.sysattributes)
+        self.location: Optional[Tuple[GameObject, str, Optional[Union[Tuple[int, int, int], Tuple[float, float, float]]]]] = None
+        self.contents: Dict[str, Inventory] = dict()
+        self.db_quota: int = 0
+        self.cpu_quota: float = 0.0
 
     def serialize(self) -> Dict:
         out: Dict = {
@@ -62,92 +82,108 @@ class GameObject:
                 n_dict[k] = n.serialize()
             out["namespaces"] = n_dict
 
+        if self.namespace:
+            out["namespace"] = [self.namespace[0].dbid, self.namespace[1]]
+
         if self.attributes.count():
             out["attributes"] = self.attributes.serialize()
 
+        if self.sys_attributes.count():
+            out["sys_attributes"] = self.sys_attributes.serialize()
+
         return out
+
+    def listeners(self):
+        out = list()
+        if self.session:
+            out.append(self.session)
+        return out
+
+    def parser(self):
+        return Parser(self.core, self.objid, self.objid, self.objid)
+
+    def msg(self, text, **kwargs):
+        flist = fmt.FormatList(self, **kwargs)
+        flist.add(fmt.Text(text))
+        self.send(flist)
+
+    def send(self, message: fmt.FormatList):
+        self.receive_msg(message)
+        for listener in self.listeners():
+            if listener not in message.relay_chain:
+                listener.send(message.relay(self))
+
+    def receive_msg(self, message: fmt.FormatList):
+        pass
 
 
 class Alliance(GameObject):
     type_name = 'ALLIANCE'
-    type_abbr = 'A'
 
 
 class Board(GameObject):
     type_name = 'BOARD'
-    type_abbr = 'B'
 
 
 class Channel(GameObject):
     type_name = 'CHANNEL'
-    type_abbr = 'C'
 
 
 class Dimension(GameObject):
     type_name = 'DIMENSION'
-    type_abbr = 'D'
+
+
+class District(GameObject):
+    type_name = 'District'
 
 
 class Exit(GameObject):
     type_name = 'EXIT'
-    type_abbr = 'E'
 
 
 class Faction(GameObject):
     type_name = 'FACTION'
-    type_abbr = 'F'
 
 
 class Gateway(GameObject):
     type_name = 'GATEWAY'
-    type_abbr = 'G'
 
 
 class HeavenlyBody(GameObject):
     type_name = 'HEAVENLYBODY'
-    type_abbr = 'H'
 
 
 class Item(GameObject):
     type_name = 'ITEM'
-    type_abbr = 'I'
 
 
 class Mobile(GameObject):
     type_name = 'MOBILE'
-    type_abbr = 'M'
 
 
 class Player(GameObject):
     type_name = 'PLAYER'
-    type_abbr = 'P'
 
 
 class Room(GameObject):
     type_name = 'ROOM'
-    type_abbr = 'R'
 
 
 class Sector(GameObject):
     type_name = 'SECTOR'
-    type_abbr = 'S'
 
 
-class User(GameObject):
-    type_name = 'USER'
-    type_abbr = 'U'
+class Thing(GameObject):
+    type_name = 'THING'
 
 
 class Vehicle(GameObject):
     type_name = 'VEHICLE'
-    type_abbr = 'V'
 
 
 class Wilderness(GameObject):
     type_name = 'WILDERNESS'
-    type_abbr = 'W'
 
 
 class Zone(GameObject):
     type_name = 'ZONE'
-    type_abbr = 'Z'

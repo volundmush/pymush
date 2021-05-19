@@ -1,8 +1,8 @@
 import re
 import hashlib
 from collections import defaultdict
-from athanor_server.utils import partial_match
-
+from athanor.utils import partial_match
+from mudstring.encodings.pennmush import decode
 
 class FlatLine:
 
@@ -149,7 +149,7 @@ class ObjAttribute:
         elif line.name == "derefs":
             self.derefs = line.value
         elif line.name == "value":
-            self.value = AnsiString.from_markup(line.value)
+            self.value = decode(line.value)
 
 
 class ObjLock:

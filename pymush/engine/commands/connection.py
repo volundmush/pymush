@@ -4,7 +4,7 @@ import time
 import traceback
 from athanor.utils import partial_match
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
-from rich.text import Text
+from mudstring.encodings.pennmush import ansi_fun
 
 from pymush.db.importer import Importer
 from pymush.db.flatfile import check_password
@@ -47,7 +47,7 @@ class ConnectCommand(_LoginCommand):
     """
     name = "connect"
     re_match = re.compile(r"^(?P<cmd>connect)(?: +(?P<args>.+))?", flags=re.IGNORECASE)
-    usage = "Usage: " + AnsiString.from_args("hw", "connect <username> <password>") + " or " + AnsiString.from_args("hw", 'connect "<user name>" password')
+    usage = "Usage: " + ansi_fun("hw", "connect <username> <password>") + " or " + ansi_fun("hw", 'connect "<user name>" password')
 
     def execute(self):
         name, password = self.parse_login(self.usage)
@@ -74,7 +74,7 @@ class CreateCommand(_LoginCommand):
     """
     name = "create"
     re_match = re.compile(r"^(?P<cmd>create)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
-    usage = "Usage: " + AnsiString.from_args("hw", 'create <username> <password>') + ' or ' + AnsiString.from_args("hw", 'create "<user name>" <password>')
+    usage = "Usage: " + ansi_fun("hw", 'create <username> <password>') + ' or ' + ansi_fun("hw", 'create "<user name>" <password>')
 
     def execute(self):
         name, password = self.parse_login(self.usage)
@@ -86,7 +86,7 @@ class CreateCommand(_LoginCommand):
         account.set_password(pass_hash, nohash=True)
         # just ignoring password for now.
         cmd = f'connect "{account.name}" <password>' if ' ' in account.name else f'connect {account.name} <password>'
-        self.msg(text="Account created! You can login with " + AnsiString.from_args('hw', cmd))
+        self.msg(text="Account created! You can login with " + ansi_fun('hw', cmd))
 
 
 class WelcomeScreenCommand(_LoginCommand):
@@ -132,7 +132,7 @@ class PennConnect(_LoginCommand):
     """
     name = 'pconnect'
     re_match = re.compile(r"^(?P<cmd>pconnect)(?: +(?P<args>.+))?", flags=re.IGNORECASE)
-    usage = "Usage: " + AnsiString.from_args("hw", "pconnect <username> <password>") + " or " + AnsiString.from_args("hw", 'pconnect "<user name>" password')
+    usage = "Usage: " + ansi_fun("hw", "pconnect <username> <password>") + " or " + ansi_fun("hw", 'pconnect "<user name>" password')
 
     def execute(self):
         name, password = self.parse_login(self.usage)
@@ -205,7 +205,7 @@ class CharCreateCommand(Command):
             raise CommandException(error)
         acc = self.enactor.relations.get('account', None)
         acc.characters.add(char)
-        self.msg(text=AnsiString(f"Character '{char.name}' created! Use ") + AnsiString.from_args("hw", f"charselect {char.name}") + " to join the game!")
+        self.msg(text=ansi_fun("", f"Character '{char.name}' created! Use ") + ansi_fun("hw", f"charselect {char.name}") + " to join the game!")
 
 
 class CharSelectCommand(Command):

@@ -29,7 +29,7 @@ class Command:
         if cls.__doc__:
             out = fmt.FormatList(enactor)
             out.add(fmt.Header(f"Help: {cls.name}"))
-            out.add(fmt.Text(cls.__doc__))
+            out.add(fmt.Line(cls.__doc__))
             out.add(fmt.Footer())
             enactor.send(out)
         else:

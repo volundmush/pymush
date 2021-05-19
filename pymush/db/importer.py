@@ -1,5 +1,5 @@
 from . flatfile import PennDB
-from athanor_server.utils import partial_match
+from athanor.utils import partial_match
 
 
 class VolDB(PennDB):
@@ -49,129 +49,84 @@ class Importer:
     def __init__(self, connection, path):
         self.db = VolDB.from_outdb(path)
         self.connection = connection
-        self.core = connection.core
+        self.game = connection.game
         connection.penn = self
         self.complete = set()
         self.obj_map = dict()
+        self.old_new = dict()
 
-    def create_obj(self, dbobj, mode, namespace=None):
-        obj, error = self.core.mapped_typeclasses[mode].create(name=dbobj.name, objid=dbobj.objid, namespace=namespace)
-        if error:
-            print(f"OOPS: {error}")
+    def create_obj(self, dbobj, mode):
+        if not (type_class := self.game.obj_classes.get(mode, None)):
+            raise ValueError(f"{mode} does not map to a type class!")
+        if dbobj.id in self.game.objects:
+            raise ValueError(f"DBREF conflict for #{dbobj.id}, cannot continue!")
+        obj = type_class(self.game, dbobj.id, dbobj.name)
+        obj.created = dbobj.created
+        obj.modified = dbobj.modified
+        for key, attr in dbobj.attributes.items():
+            if key == 'ALIAS':
+                for a in [a for a in attr.value.clean.split(';') if a]:
+                    obj.aliases.append(a)
+            else:
+                obj.attributes.set_or_create(key, attr.value)
         self.obj_map[dbobj.id] = obj
+        self.old_new[dbobj] = obj
         return obj
 
-    def get_or_create_obj(self, dbobj, mode, namespace=None):
-        if not (obj := self.obj_map.get(dbobj.id, None)):
-            obj = self.create_obj(dbobj, mode, namespace=namespace)
-            obj.attributes.set('core', 'datetime_created', dbobj.created)
-            obj.attributes.set('core', 'datetime_modified', dbobj.modified)
-            for k, v in dbobj.attributes.items():
-                if k == 'ALIAS':
-                    for a in [a for a in v.value.clean.split(';') if a]:
-                        obj.aliases.append(a)
-                else:
-                    owner = self.obj_map.get(v.owner, None)
-                    flags = v.flags
-                    obj.attributes.set('mush', k, {"owner": owner.objid if owner else None, "flags": list(flags), 'value': v.value.encoded()})
-        return obj
+    def import_skeleton(self):
+        for data, mode in ((self.db.list_accounts(), 'USER'), (self.db.list_groups(), 'FACTION'),
+                           (self.db.list_districts(), 'DISTRICT'), (self.db.list_players(), 'PLAYER'),
+                           (self.db.list_rooms(), 'ROOM'), (self.db.list_exits(), 'EXIT'),
+                           (self.db.list_things(), 'THING')):
+            for k, v in data.items():
+                if k in self.obj_map:
+                    continue
+                self.create_obj(v, mode)
 
-    def import_grid(self):
-        districts = dict()
-        dis_data = self.db.list_districts()
-        for k, v in dis_data.items():
-            obj = self.get_or_create_obj(v, 'district')
-            obj.add_tag('penn_district')
-            districts[k] = obj
-        for k, v in districts.items():
-            dbobj = dis_data[k]
-            if (parent := self.obj_map.get(dbobj.parent, None)):
-                parent.districts.add(v)
-            if (ic := dbobj.get('D`IC', inherit=False)) and ic.value.truthy():
-                v.attributes.set('core', 'ic', True)
-
-        room_data = self.db.list_rooms()
-        room_total = dict()
-        room_districts = dict()
-        nodist_room = dict()
-        for k, v in room_data.items():
-            obj = self.get_or_create_obj(v, 'room')
-            if (district := districts.get(v.parent, None)):
-                district.rooms.add(obj)
-                room_districts[k] = obj
+    def process_reverse(self):
+        for old, new in self.old_new.items():
+            if (parent := self.obj_map.get(old.parent, None)):
+                new.parent = parent
+                parent.parent_of.add(new)
+            if (owner := self.obj_map.get(old.owner, None)):
+                new.owner = owner
+                owner.owner_of.add(new)
+            if (zone := self.obj_map.get(old.zone, None)):
+                new.zone = zone
+                zone.zone_of.add(new)
+            if old.type == 4:
+                if (destination := self.obj_map.get(old.location, None)):
+                    new.home = destination
+                    destination.home_of.add(new)
+                if (location := self.obj_map.get(old.exits, None)):
+                    new.location = (location, 'exits', None)
+                    #location.contents.add('exits', new, None)
             else:
-                nodist_room[k] = obj
-            room_total[k] = v
-            obj.add_tag('penn_room')
+                if (location := self.obj_map.get(old.location, None)):
+                    new.location = (location, '', None)
+                    #location.contents.add('', new, None)
 
-        exit_data = self.db.list_exits()
-        exit_total = dict()
-        exit_dist = dict()
-        exit_nodist = dict()
-        for k, v in exit_data.items():
-            if not (location := self.obj_map.get(v.exits, None)):
-                continue  # No reason to make an Exit for a room that doesn't exist, is there?
-            if not (destination := self.obj_map.get(v.location, None)):
-                continue  # No reason to make an Exit for a room that doesn't exist, is there?
-            obj = self.get_or_create_obj(v, 'exit')
-            location.exits.add(obj)
-            destination.entrances.add(obj)
-            if (dist := location.relations.get('room_district')):
-                dist.exits.add(obj)
-                exit_dist[k] = obj
-            else:
-                exit_nodist[k] = obj
 
-            obj.add_tag('penn_exit')
-            exit_total[k] = obj
-        return {
-            'districts': districts.values(),
-            'room_total': room_total.values(),
-            'room_nodist': nodist_room.values(),
-            'room_dist': room_districts.values(),
-            'exit_total': exit_total.values(),
-            'exit_dist': exit_dist.values(),
-            'exit_nodist': exit_nodist.values()
-        }
+    def process_finalize(self):
+        for old, new in self.old_new.items():
+            if old.type == 8:
+                if new.parent and new.parent.type_name == 'USER':
+                    account = new.parent
+                    new.owner = account
+                    new.parent = None
+                    account.parent_of.remove(new)
+                    account.owner_of.add(new)
+                    if 'WIZARD' in old.flags:
+                        account.admin_level = max(account.admin_level, 10)
+                    elif 'ROYALTY' in old.flags:
+                        account.admin_level = max(account.admin_level, 8)
+                    elif (va := old.attributes.get('mush', 'V`ADMIN')):
+                        if va == '1':
+                            account.admin_level = max(account.admin_level, 6)
 
-    def import_accounts(self):
-        namespace = self.core.namespace_prefix['A']
-        data = self.db.list_accounts()
-        total = list()
-        for k, v in data.items():
-            obj = self.get_or_create_obj(v, 'account', namespace=namespace)
-            obj.add_tag('penn_account')
-            total.append(obj)
-        return total
 
-    def import_characters(self):
-        namespace = self.core.namespace_prefix['C']
-        data = self.db.list_players()
-        total = list()
-        for k, v in data.items():
-            if 'Guest' in v.powers:
-                # Filtering out guests.
-                continue
-            obj = self.get_or_create_obj(v, 'mobile', namespace=namespace)
-            obj.attributes.set("core", "penn_hash", v.get('XYXXY').value.clean)
-            if (account := self.obj_map.get(v.parent, None)):
-                # Hooray, we have an account!
-                account.characters.add(obj)
-
-                if 'WIZARD' in v.flags:
-                    if not account.attributes.has('core', 'supervisor_level'):
-                        account.attributes.set('core', 'supervisor_level', 10)
-                elif 'ROYALTY' in v.flags:
-                    if not account.attributes.has('core', 'supervisor_level'):
-                        account.attributes.set('core', 'supervisor_level', 8)
-                elif (va := obj.attributes.get('mush', 'V`ADMIN')):
-                    if va == '1':
-                        if not account.attributes.has('core', 'supervisor_level'):
-                            account.attributes.set('core', 'supervisor_level', 6)
-
-                # if we don't get an account, then this character can still be accessed using their password, but...
-            if (location := self.obj_map.get(v.location, None)):
-                obj.attributes.set('core', 'logout_location', location.objid)
-            obj.add_tag('penn_character')
-            total.append(obj)
-        return total
+    def run(self):
+        self.import_skeleton()
+        self.process_reverse()
+        self.process_finalize()
+        self.connection.print("IMPORT COMPLETE!?")
