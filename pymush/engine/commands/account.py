@@ -2,7 +2,7 @@ import re
 import datetime
 from . base import MushCommand, CommandException, PythonCommandMatcher, Command
 from rich.text import Text
-from from athanor.utils import partial_match
+from athanor.utils import partial_match
 from athanor_server.utils import formatter as fmt
 from athanor_server.utils.text import duration_format, red_yellow_green, percent_cap
 from athanor_server.utils import validatorfuncs as valid
@@ -10,7 +10,7 @@ from athanor_server.utils import validatorfuncs as valid
 
 class ACreateCommand(MushCommand):
     """
-    Creates an Account.
+    Creates a User Account.
     """
     name = '@acreate'
     aliases = []
@@ -190,13 +190,13 @@ class SLevelCommand(MushCommand):
     """
     Sets Supervisor Level, for granting/removing admin access.
     """
-    name = '@slevel'
-    aliases = ['@sle', '@slev', '@sleve']
+    name = '@alevel'
+    aliases = ['@ale', '@alev', '@aleve']
     help_category = 'Administration'
 
     @classmethod
     def access(cls, enactor):
-        return enactor.get_slevel() >= 6
+        return enactor.get_alevel() >= 6
 
 
 class StyleCommand(MushCommand):

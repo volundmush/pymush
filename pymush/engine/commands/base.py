@@ -47,16 +47,15 @@ class Command:
         if (result := cls.re_match.fullmatch(text)):
             return result
 
-    def __init__(self, enactor, match_obj, group, obj_chain):
+    def __init__(self, enactor, match_obj):
         """
         Instantiates the command.
         """
         self.enactor = enactor
         self.match_obj = match_obj
-        self.cmd_group = group
-        self.obj_chain = obj_chain
         self.entry = None
         self.parser = None
+        self.service = None
 
     def execute(self):
         """
@@ -112,8 +111,8 @@ class MushCommand(Command):
         if (result := matcher.fullmatch(text)):
             return result
 
-    def __init__(self, enactor, match_obj, group, obj_chain):
-        super().__init__(enactor, match_obj, group, obj_chain)
+    def __init__(self, enactor, match_obj, group):
+        super().__init__(enactor, match_obj, group)
         self.mdict = self.match_obj.groupdict()
         self.cmd = self.mdict["cmd"]
         self.args = self.mdict["args"]
@@ -139,7 +138,7 @@ class BaseCommandMatcher:
         """
         pass
 
-    def match(self, enactor, text, obj_chain):
+    def match(self, enactor, text):
         pass
 
     def populate_help(self, enactor, data):
@@ -158,11 +157,10 @@ class PythonCommandMatcher(BaseCommandMatcher):
     def add(self, cmd_class):
         self.cmds.add(cmd_class)
 
-    def match(self, enactor, text, obj_chain):
+    def match(self, enactor, text):
         for cmd in self.cmds:
             if cmd.access(enactor) and (result := cmd.match(enactor, text)):
-                obj_chain[enactor.typeclass_name] = self
-                return cmd(enactor, result, self, obj_chain)
+                return cmd(enactor, result)
 
     def populate_help(self, enactor, data):
         for cmd in self.cmds:

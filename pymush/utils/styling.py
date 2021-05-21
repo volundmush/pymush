@@ -9,7 +9,7 @@ class StyleHandler:
         self.load()
 
     def load(self):
-        for k, v in self.owner.core.styles.items():
+        for k, v in self.owner.game.styles.items():
             handler = OptionHandler(self.owner, options_dict=v)
             self.styles[k] = handler
 

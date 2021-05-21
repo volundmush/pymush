@@ -1,39 +1,56 @@
 from . import formatter as fmt
 from rich.text import Text
+from mudstring.encodings.pennmush import ansi_fun, send_menu, ansify, ansi_fun_style
 
 
-def render_select_screen(enactor):
-    acc = enactor.relations.get('account', None)
+def render_select_screen(connection):
+    acc = connection.user
 
-    out = fmt.FormatList(enactor)
+    out = fmt.FormatList(acc)
     out.add(fmt.Header(f"Account: {acc.name}"))
-    t1 = fmt.Table("Trait", "Value")
-    t1.add_row("Email", f"{acc.attributes.get('core', 'email')}")
-    t1.add_row('Last Logon', f"{acc.attributes.get('core', 'last')}")
+    t1 = fmt.Table()
+    t1.add_column("Trait")
+    t1.add_column("Value")
+    t1.add_row("Email", f"{acc.email}")
+    t1.add_row('Last Login', f"{acc.last_login}")
     out.add(t1)
-    if (conn := acc.connections.all()) and (conn := [c for c in conn if c.connection]):
+
+    if acc.connections:
         out.add(fmt.Subheader("Connections"))
-        t2 = fmt.Table("Id", "Protocol", "Host", "Connected", "Client", "Width")
-        for c in conn:
-            c2 = c.connection
-            t2.add_row(f"{c.name}", f"{c2.protocol}", f"{c2.address}", "", f"{c2.client_name}", f"{c2.width}")
+        t2 = fmt.Table()
+        for t in ("Id", "Protocol", "Host", "Connected", "Client", "Width"):
+            t2.add_column(t)
+        for c in acc.connections:
+            t2.add_row(f"{c.client_id}", f"{str(c.details.protocol)}", f"{c.details.host_address}", "", f"{c.details.client_name}", f"{c.details.width}")
         out.add(t2)
-    if (chars := acc.characters.all()):
+
+
+    if (chars := acc.characters):
         out.add(fmt.Subheader("Characters"))
-        t3 = fmt.Table("Id", "Name")
+        t3 = fmt.Table()
+        t3.add_column("Id")
+        t3.add_column("Name")
         for c in chars:
-            t3.add_row(f"{c.objid}", AnsiString.send_menu(c.name, ((f'@ic {c.name}', f"Join the game as {c.name}"), (f"@examine {c.name}", f"@examine {c.name}"))))
+            t3.add_row(f"{c.dbid}", send_menu(c.name, ((f'@ic {c.name}', f"Join the game as {c.name}"), (f"@examine {c.name}", f"@examine {c.name}"))))
         out.add(t3)
+
+
     out.add(fmt.Subheader("Commands"))
-    t4 = fmt.Table("Command", "Description")
+
+    cmd_style = ansi_fun_style('hw')
+
+    t4 = fmt.Table()
+    t4.add_column("Command")
+    t4.add_column("Description")
+    t4.add_row(ansify(cmd_style, "@charcreate <name>"), "Create a character.")
+    t4.add_row(ansify(cmd_style, "@chardelete <name>=<password>"), "Delete a character.")
+    t4.add_row(ansify(cmd_style, "@charrename <name>=<newname>"), "Rename a character.")
+    t4.add_row(ansify(cmd_style, "@username <new name>"), "Change your username.")
+    t4.add_row(ansify(cmd_style, "@email <new email>"), "Change your email.")
+    t4.add_row(ansify(cmd_style, "@ic <name>"), "Enter the game as a character.")
+    t4.add_row(ansify(cmd_style, "help"), "See more information.")
+    t4.add_row(ansify(cmd_style, "QUIT"), "Terminate this connection.")
+    t4.add_row(ansify(cmd_style, "@kick <id>"), "Terminates another connection.")
+
     out.add(t4)
-    t4.add_row(AnsiString.from_args("hw", "@charcreate <name>"), "Create a character.")
-    t4.add_row(AnsiString.from_args("hw", "@chardelete <name>=<password>"), "Delete a character.")
-    t4.add_row(AnsiString.from_args("hw", "@charrename <name>=<newname>"), "Rename a character.")
-    t4.add_row(AnsiString.from_args("hw", "@username <new name>"), "Change your username.")
-    t4.add_row(AnsiString.from_args("hw", "@email <new email>"), "Change your email.")
-    t4.add_row(AnsiString.from_args("hw", "@ic <name>"), "Enter the game as a character.")
-    t4.add_row(AnsiString.from_args("hw", "help"), "See more information.")
-    t4.add_row(AnsiString.from_args("hw", "QUIT"), "Terminate this connection.")
-    t4.add_row(AnsiString.from_args("hw", "@kick <id>"), "Terminates another connection.")
-    return enactor.send(out)
+    return out

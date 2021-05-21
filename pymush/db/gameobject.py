@@ -1,19 +1,20 @@
 import sys
-from typing import Union, Set, Optional, List, Dict, Tuple
+from typing import Union, Set, Optional, List, Dict, Tuple, Iterable
 from athanor.utils import lazy_property
-from ..conn import Connection
 from .attributes import AttributeHandler
 from athanor.shared import ConnectionOutMessage, ConnectionOutMessageType, ConnectionInMessageType, ConnectionInMessage
+from ..utils import formatter as fmt
+from ..utils.styling import StyleHandler
 
 
 class GameSession:
 
-    def __init__(self, sid: int, user: "User", character: "GameObject"):
+    def __init__(self, sid: int, user: "GameObject", character: "GameObject"):
         self.sid: int = sid
-        self.user: "User" = user
+        self.user: "GameObject" = user
         self.character: "GameObject" = character
         self.puppet: "GameObject" = character
-        self.connections: Set[Connection] = set()
+        self.connections: Set["Connection"] = set()
         self.in_events: List[ConnectionInMessage] = list()
         self.out_events: List[ConnectionOutMessage] = list()
 
@@ -36,12 +37,13 @@ class Inventory:
 class GameObject:
     type_name = None
     type_ancestor: Optional["GameObject"] = None
+    unique_names = False
 
     __slots__ = ["service", "dbid", "dbref", "name", "parent", "parent_of", "home", "home_of", "db_quota", "cpu_quota",
-                 "zone", "zone_of", "owner", "owner_of", "namespaces", "namespace", "session",
-                 "attributes", "sys_attributes", "location", "contents", "aliases", "created", "modified"]
+                 "zone", "zone_of", "owner", "owner_of", "namespaces", "namespace", "sessions", "connections",
+                 "attributes", "sys_attributes", "location", "contents", "aliases", "created", "modified", "style_holder"]
 
-    def __init__(self, service: "GameService", dbref: int, name: str, owner: "User"):
+    def __init__(self, service: "GameService", dbref: int, name: str):
         self.service = service
         self.dbid = dbref
         self.dbref = f"#{dbref}"
@@ -49,7 +51,7 @@ class GameObject:
         self.modified: int = 0
         self.name = sys.intern(name)
         self.aliases: List[str] = list()
-        self.owner: "User" = owner
+        self.owner: Optional["GameObject"] = None
         self.parent: Optional[GameObject] = None
         self.parent_of: Set[GameObject] = set()
         self.home: Optional[GameObject] = None
@@ -60,13 +62,32 @@ class GameObject:
         self.owner_of: Set[GameObject] = set()
         self.namespaces: Dict[str, NameSpace] = dict()
         self.namespace: Optional[Tuple[GameObject, str]] = None
-        self.session: Optional["GameSession"] = None
+        self.sessions: Set["GameSession"] = set()
+        self.connections: Set["Connection"] = set()
         self.attributes = AttributeHandler(self, self.service.attributes)
-        self.sys_attributes = AttributeHandler(self, self.service.sysattributes)
+        self.sys_attributes = dict()
         self.location: Optional[Tuple[GameObject, str, Optional[Union[Tuple[int, int, int], Tuple[float, float, float]]]]] = None
         self.contents: Dict[str, Inventory] = dict()
         self.db_quota: int = 0
         self.cpu_quota: float = 0.0
+        self.admin_level: int = 0
+        self.style_holder: Optional[StyleHandler] = None
+
+    @property
+    def style(self):
+        if not self.style_holder:
+            self.style_holder = StyleHandler(self)
+        return self.style_holder
+
+    @property
+    def game(self):
+        return self.service
+
+    def __int__(self):
+        return self.dbid
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} {self.dbid}: {self.name}>"
 
     def serialize(self) -> Dict:
         out: Dict = {
@@ -94,17 +115,14 @@ class GameObject:
         return out
 
     def listeners(self):
-        out = list()
-        if self.session:
-            out.append(self.session)
-        return out
+        return self.sessions if self.sessions else []
 
     def parser(self):
         return Parser(self.core, self.objid, self.objid, self.objid)
 
     def msg(self, text, **kwargs):
         flist = fmt.FormatList(self, **kwargs)
-        flist.add(fmt.Text(text))
+        flist.add(fmt.Line(text))
         self.send(flist)
 
     def send(self, message: fmt.FormatList):
@@ -163,6 +181,23 @@ class Mobile(GameObject):
 
 class Player(GameObject):
     type_name = 'PLAYER'
+    unique_names = True
+
+    @property
+    def account(self):
+        aid = self.sys_attributes.get('account', None)
+        if aid is not None:
+            account = self.service.objects.get(aid, None)
+            if account:
+                return account
+
+    @account.setter
+    def account(self, account: Optional[GameObject] = None):
+        if account:
+            self.sys_attributes['account'] = int(account)
+        else:
+            self.sys_attributes.pop('account', None)
+
 
 
 class Room(GameObject):
@@ -175,6 +210,86 @@ class Sector(GameObject):
 
 class Thing(GameObject):
     type_name = 'THING'
+
+
+class User(GameObject):
+    type_name = 'USER'
+    unique_names = True
+
+    @property
+    def email(self) -> Optional[str]:
+        return self.sys_attributes.get('email', None)
+
+    @email.setter
+    def email(self, email: Optional[str]):
+        if email:
+            self.sys_attributes['email'] = email
+        else:
+            self.sys_attributes.pop('email', None)
+
+    @property
+    def last_login(self) -> Optional[float]:
+        return self.sys_attributes.get('last_login', None)
+
+    @last_login.setter
+    def last_login(self, timestamp: Optional[float]):
+        if timestamp:
+            self.sys_attributes['last_login'] = timestamp
+        else:
+            self.sys_attributes.pop('last_login', None)
+
+    @property
+    def password(self):
+        return self.sys_attributes.get('password', None)
+
+    @password.setter
+    def password(self, hash: Optional[str] = None):
+        if hash:
+            self.sys_attributes['password'] = hash
+        else:
+            self.sys_attributes.pop('password', None)
+
+    def change_password(self, text, nohash=False):
+        if not nohash:
+            text = self.service.crypt_con.hash(text)
+        self.password = text
+
+    def check_password(self, text):
+        hash = self.password
+        if not hash:
+            return False
+        return self.service.crypt_con.verify(text, hash)
+
+    def add_character(self, character: GameObject):
+        characters = self.characters
+        if character not in characters:
+            characters.add(character)
+            self.characters = characters
+            character.account = self
+
+    def remove_character(self, character: GameObject):
+        characters = self.characters
+        if character in characters:
+            characters.remove(character)
+            self.characters = characters
+        if character.account == self:
+            character.account = None
+
+    @property
+    def characters(self):
+        ids = self.sys_attributes.get('characters', set())
+        count = len(ids)
+        result = set([i for f in ids if (i := self.service.objects.get(f, None))])
+        if len(result) != count:
+            self.characters = result
+        return result
+
+    @characters.setter
+    def characters(self, characters: Optional[Iterable[GameObject]] = None):
+        if characters:
+            self.sys_attributes['characters'] = [int(c) for c in characters]
+        else:
+            self.sys_attributes.pop('characters', None)
 
 
 class Vehicle(GameObject):

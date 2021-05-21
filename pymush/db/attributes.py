@@ -9,6 +9,11 @@ class Attribute:
     name: str
     holders: Set = field(default_factory=set)
 
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return (other is self) or (other.name == self.name)
 
 class AttributeManager:
 
@@ -69,3 +74,6 @@ class AttributeHandler:
             else:
                 val = AttributeValue(attr, value)
                 self.attributes[attr] = val
+
+    def wipe(self, pattern):
+        pass

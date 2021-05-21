@@ -109,7 +109,7 @@ class OptionHandler:
 
         """
         desc, clsname, default_val = self.options_dict[key]
-        loaded_option = self.obj.core.option_classes.get(clsname)(self, key, desc, default_val)
+        loaded_option = self.obj.game.option_classes.get(clsname)(self, key, desc, default_val)
         # store the value for future easy access
         self.options[key] = loaded_option
         return loaded_option

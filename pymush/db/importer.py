@@ -14,7 +14,7 @@ class VolDB(PennDB):
             self.ccp = code_object
         if not (attr := self.ccp.get(f"COBJ`{abbr.upper()}")):
             return None
-        return self.find_obj(attr.value.clean)
+        return self.find_obj(attr.value.plain)
 
     def list_accounts(self):
         if not (account_parent := self.cobj('accounts')):
@@ -65,12 +65,14 @@ class Importer:
         obj.modified = dbobj.modified
         for key, attr in dbobj.attributes.items():
             if key == 'ALIAS':
-                for a in [a for a in attr.value.clean.split(';') if a]:
+                for a in [a for a in attr.value.plain.split(';') if a]:
                     obj.aliases.append(a)
             else:
                 obj.attributes.set_or_create(key, attr.value)
         self.obj_map[dbobj.id] = obj
         self.old_new[dbobj] = obj
+        self.game.objects[dbobj.id] = obj
+        self.game.type_index[type_class].add(obj)
         return obj
 
     def import_skeleton(self):
@@ -85,16 +87,24 @@ class Importer:
 
     def process_reverse(self):
         for old, new in self.old_new.items():
-            if (parent := self.obj_map.get(old.parent, None)):
-                new.parent = parent
-                parent.parent_of.add(new)
-            if (owner := self.obj_map.get(old.owner, None)):
-                new.owner = owner
-                owner.owner_of.add(new)
+
             if (zone := self.obj_map.get(old.zone, None)):
                 new.zone = zone
                 zone.zone_of.add(new)
-            if old.type == 4:
+
+            if old.type == 8:  # a player
+                if (parent := self.obj_map.get(old.parent, None)):
+                    if parent.type_name == 'USER':
+                        parent.add_character(new)
+            else:
+                if (parent := self.obj_map.get(old.parent, None)):
+                    new.parent = parent
+                    parent.parent_of.add(new)
+                if (owner := self.obj_map.get(old.owner, None)):
+                    new.owner = owner
+                    owner.owner_of.add(new)
+
+            if old.type == 4:  # an exit
                 if (destination := self.obj_map.get(old.location, None)):
                     new.home = destination
                     destination.home_of.add(new)
@@ -126,7 +136,10 @@ class Importer:
 
 
     def run(self):
-        self.import_skeleton()
-        self.process_reverse()
-        self.process_finalize()
-        self.connection.print("IMPORT COMPLETE!?")
+        try:
+            self.import_skeleton()
+            self.process_reverse()
+            self.process_finalize()
+            self.connection.msg("IMPORT COMPLETE!?")
+        except Exception as e:
+            self.connection.msg(f"SOMETHING WENT WRONG: {e}")

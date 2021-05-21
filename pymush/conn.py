@@ -8,7 +8,9 @@ from athanor_server.conn import Connection as BaseConnection
 import time
 from .engine.cmdqueue import QueueEntry
 from .utils.welcome import message as WELCOME
-
+from .utils import formatter as fmt
+from .utils.selectscreen import render_select_screen
+from .utils.styling import StyleHandler
 
 COLOR_MAP = {
     ColorSystem.STANDARD: "standard",
@@ -21,13 +23,24 @@ COLOR_MAP = {
 class Connection(BaseConnection):
     def __init__(self, service: "ConnectionService", details: ConnectionDetails):
         super().__init__(service, details)
-        self.game = self.service.app.game
         self.connected = details.connected
         self.last_activity = self.connected
         self.user: Optional["GameObject"] = None
         self.session: Optional["GameSession"] = None
-        self.console = MudConsole(color_system=COLOR_MAP[details.color] if details.color else None, mxp=details.mxp_active, file=self, width=details.width)
+        self.console = MudConsole(color_system=COLOR_MAP[details.color] if details.color else None,
+                                  mxp=details.mxp_active, file=self, width=details.width)
         self.menu = None
+        self.conn_style = StyleHandler(self, save=False)
+
+    @property
+    def style(self):
+        if self.user:
+            return self.user.style
+        return self.conn_style
+
+    @property
+    def game(self):
+        return self.service.app.game
 
     def flush(self):
         pass
@@ -50,7 +63,7 @@ class Connection(BaseConnection):
             if self.session:
                 entry = QueueEntry.from_session(self.session, cmd, self)
             elif self.user:
-                entry = QueueEntry.from_user(self.user, cmd, self)
+                entry = QueueEntry.from_selectscreen(self.user, cmd, self)
             else:
                 entry = QueueEntry.from_login(self, cmd)
             self.game.queue.push(entry)
@@ -72,7 +85,7 @@ class Connection(BaseConnection):
 
     def msg(self, text, **kwargs):
         flist = fmt.FormatList(self, **kwargs)
-        flist.add(fmt.Text(text))
+        flist.add(fmt.Line(text))
         self.send(flist)
 
     def send(self, message: fmt.FormatList):
@@ -83,3 +96,14 @@ class Connection(BaseConnection):
 
     def receive_msg(self, message: fmt.FormatList):
         message.send(self)
+
+    def login(self, account: "GameObject"):
+        self.user = account
+        account.connections.add(self)
+        self.receive_msg(render_select_screen(self))
+
+    def logout(self):
+        user = self.user
+        if user:
+            self.user = None
+            user.connections.remove(self)
