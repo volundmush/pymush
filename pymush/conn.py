@@ -10,6 +10,7 @@ from .utils.welcome import message as WELCOME
 from .utils import formatter as fmt
 from .utils.selectscreen import render_select_screen
 from .utils.styling import StyleHandler
+import weakref
 
 COLOR_MAP = {
     ColorSystem.STANDARD: "standard",
@@ -20,6 +21,10 @@ COLOR_MAP = {
 
 
 class Connection(BaseConnection):
+    login_matchers = ('login',)
+    select_matchers = ('selectscreen',)
+
+
     def __init__(self, service: "ConnectionService", details: ConnectionDetails):
         super().__init__(service, details)
         self.connected = details.connected
@@ -118,18 +123,40 @@ class Connection(BaseConnection):
     def on_join_session(self, session: "GameSession"):
         pass
 
+    def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
+        for matcher_name in matcher_categories:
+            matchers = self.game.command_matchers.get(matcher_name, None)
+            for matcher in matchers:
+                if matcher:
+                    cmd = matcher.match(entry, cmd_text)
+                    if cmd:
+                        return cmd
+
+    def find_login_cmd(self, entry: "QueueEntry", cmd_text: str):
+        return self._find_cmd(entry, cmd_text, self.login_matchers)
+
+    def find_selectscreen_cmd(self, entry: "QueueEntry", cmd_text: str):
+        return self._find_cmd(entry, cmd_text, self.select_matchers)
+
 
 class GameSession:
+    session_matchers = ('session',)
 
     def __init__(self, user: "GameObject", character: "GameObject"):
-        self.user: "GameObject" = user
-        self.character: "GameObject" = character
-        self.puppet: "GameObject" = character
+        self.user: "GameObject" = weakref.proxy(user)
+        weakchar = weakref.proxy(character)
+        self.character: "GameObject" = weakchar
+        self.puppet: "GameObject" = weakchar
         self.connections: Set["Connection"] = set()
         self.in_events: List[ConnectionInMessage] = list()
         self.out_events: List[ConnectionOutMessage] = list()
         self.quelled = True
-        self.character.sessions.add(self)
+        self.character.session = self
+        self.user.account_sessions.add(self)
+
+    @property
+    def game(self):
+        return self.user.game
 
     def get_alevel(self, ignore_quell=False):
         if self.quelled and not ignore_quell:
@@ -156,3 +183,18 @@ class GameSession:
 
     def on_first_connection(self, connection: "Connection"):
         pass
+
+    def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
+        for matcher_name in matcher_categories:
+            matchers = self.game.command_matchers.get(matcher_name, None)
+            for matcher in matchers:
+                if matcher:
+                    cmd = matcher.match(entry, cmd_text)
+                    if cmd:
+                        return cmd
+
+    def find_cmd(self, entry: "QueueEntry", cmd_text: str):
+        cmd = self._find_cmd(entry, cmd_text, self.session_matchers)
+        if cmd:
+            return cmd
+        return self.puppet.find_cmd(entry, cmd_text)

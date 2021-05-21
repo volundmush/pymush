@@ -8,6 +8,8 @@ from enum import IntEnum
 from athanor_server.conn import Connection
 from pymush.db.objects.base import GameObject
 import asyncio
+import weakref
+from .parser import Parser
 
 
 class QueueEntryType(IntEnum):
@@ -41,17 +43,27 @@ class QueueEntry:
         self.split_actions = False
         self.pid: Optional[int] = None
         self.wait: Optional[float] = None
-        self.created: Optional[float] = None
+        self.created: Optional[float] = time.time()
 
     @property
     def game(self):
         return self.queue.service
 
+    def get_alevel(self, ignore_quell=False):
+        if self.type == QueueEntryType.SCRIPT:
+            return self.executor.admin_level
+        elif self.session:
+            return self.session.get_alevel(ignore_quell=ignore_quell)
+        else:
+            return self.executor.admin_level
+
     @classmethod
     def from_login(cls, conn: Connection, command: str) -> "QueueEntry":
         entry = cls(QueueEntryType.LOGIN)
-        entry.enactor = conn
-        entry.connection = conn
+        entry.enactor = weakref.proxy(conn)
+        entry.executor = entry.enactor
+        entry.caller = entry.enactor
+        entry.connection = entry.enactor
         entry.actions = command
         return entry
 
@@ -59,24 +71,26 @@ class QueueEntry:
     def from_selectscreen(cls, user: GameObject, command: str, connection: Optional[Connection] = None) -> "QueueEntry":
         entry = cls(QueueEntryType.SELECTSCREEN)
         if connection:
-            entry.connection = connection
-        entry.user = user
-        entry.enactor = user
-        entry.executor = user
-        entry.caller = user
+            entry.connection = weakref.proxy(connection)
+        entry.user = weakref.proxy(user)
+        entry.enactor = entry.connection
+        entry.executor = entry.connection
+        entry.caller = entry.connection
         entry.actions = command
+        entry.parser = Parser(entry, entry.enactor, entry.executor, entry.caller)
         return entry
 
     @classmethod
     def from_session(cls, sess: "GameSession", command: str, connection: Optional[Connection] = None) -> "QueueEntry":
         entry = cls(QueueEntryType.SESSION)
         if connection:
-            entry.connection = connection
-        entry.session = sess
+            entry.connection = weakref.proxy(connection)
+        entry.session = weakref.proxy(sess)
         entry.user = sess.user
         entry.enactor = sess.puppet
         entry.executor = sess.puppet
         entry.caller = sess.puppet
+        entry.parser = Parser(entry, entry.enactor, entry.executor, entry.caller)
         entry.actions = command
         return entry
 
@@ -89,32 +103,9 @@ class QueueEntry:
         entry.caller = caller if caller else enactor
         entry.spoof = spoof
         entry.actions = command
+        entry.parser = Parser(entry, entry.enactor, entry.executor, entry.caller)
         entry.split_actions = True
         return entry
-
-    def process_action(self, enactor, text):
-        try:
-            cmd = enactor.find_cmd(text)
-            if cmd:
-                cmd.core = self.core
-                self.cmd = cmd
-                cmd.entry = self
-                cmd.parser = self.parser
-                try:
-                    cmd.at_pre_execute()
-                    cmd.execute()
-                    cmd.at_post_execute()
-                except CommandException as e:
-                    cmd.msg(str(e))
-                except Exception as e:
-                    cmd.msg(text=f"EXCEPTION: {str(e)}")
-                    traceback.print_exc(file=sys.stdout)
-                self.cmd = None
-            else:
-                enactor.msg('Huh?  (Type "help" for help.)')
-        except Exception as e:
-            print(f"Something foofy happened: {e}")
-            traceback.print_exc(file=sys.stdout)
 
     def action_splitter(self, remaining: str):
         while len(remaining):
@@ -123,100 +114,38 @@ class QueueEntry:
                 yield result
 
     def execute(self):
-        self.start_timer = time.time()
-        if self.type == QueueEntryType.LOGIN:
-            self.execute_login_actions()
-        elif self.type == QueueEntryType.SELECTSCREEN:
-            self.execute_selectscreen_actions()
-        elif self.type == QueueEntryType.SESSION:
-            self.execute_session_actions()
-        elif self.type == QueueEntryType.SCRIPT:
-            self.execute_script_actions()
-
-    def execute_login_actions(self):
-        enactor = self.connection
         try:
-            cmd = None
-            for matcher in self.queue.service.command_matchers.get('login', list()):
-                cmd = matcher.match(enactor, self.actions)
-                if cmd:
-                    break
-            if cmd:
-                cmd.service = self.queue.service
-                self.cmd = cmd
-                cmd.entry = self
-                cmd.parser = self.parser
-                try:
-                    cmd.at_pre_execute()
-                    cmd.execute()
-                    cmd.at_post_execute()
-                except CommandException as e:
-                    cmd.msg(str(e))
-                except Exception as e:
-                    cmd.msg(text=f"EXCEPTION: {str(e)}")
-                    traceback.print_exc(file=sys.stdout)
-                self.cmd = None
+            self.start_timer = time.time()
+            if self.type == QueueEntryType.SCRIPT:
+                self.execute_script_actions()
             else:
-                enactor.msg('Huh?  (Type "help" for help.)')
+                cmd = None
+                if self.type == QueueEntryType.LOGIN:
+                    cmd = self.connection.find_login_cmd(self, self.actions)
+                elif self.type == QueueEntryType.SELECTSCREEN:
+                    cmd = self.connection.find_selectscreen_cmd(self, self.actions)
+                elif self.type == QueueEntryType.SESSION:
+                    cmd = self.session.find_cmd(self, self.actions)
+                if cmd:
+                    self.execute_cmd(cmd)
+                else:
+                    self.enactor.msg(text='Huh?  (Type "help" for help.)')
         except Exception as e:
             print(f"Something foofy happened: {e}")
             traceback.print_exc(file=sys.stdout)
 
-    def execute_selectscreen_actions(self):
+    def execute_cmd(self, cmd):
+        cmd.service = self.queue.service
+        cmd.entry = self
+        cmd.parser = self.parser
         try:
-            cmd = None
-            for matcher in self.queue.service.command_matchers.get('selectscreen', list()):
-                cmd = matcher.match(self.enactor, self.actions)
-                if cmd:
-                    break
-            if cmd:
-                cmd.service = self.queue.service
-                self.cmd = cmd
-                cmd.entry = self
-                cmd.parser = self.parser
-                try:
-                    cmd.at_pre_execute()
-                    cmd.execute()
-                    cmd.at_post_execute()
-                except CommandException as e:
-                    cmd.msg(str(e))
-                except Exception as e:
-                    cmd.msg(text=f"EXCEPTION: {str(e)}")
-                    traceback.print_exc(file=sys.stdout)
-                self.cmd = None
-            else:
-                self.enactor.msg('Huh?  (Type "help" for help.)')
+            cmd.at_pre_execute()
+            cmd.execute()
+            cmd.at_post_execute()
+        except CommandException as e:
+            cmd.msg(str(e))
         except Exception as e:
-            print(f"Something foofy happened: {e}")
-            traceback.print_exc(file=sys.stdout)
-
-    def execute_session_actions(self):
-        try:
-            cmd = None
-            for matcher in self.queue.service.command_matchers.get('session', list()):
-                print(f"checking {matcher}")
-                cmd = matcher.match(self, self.actions)
-                if cmd:
-                    break
-            if cmd:
-                cmd.service = self.queue.service
-                self.cmd = cmd
-                cmd.entry = self
-                cmd.parser = self.parser
-                try:
-                    cmd.at_pre_execute()
-                    cmd.execute()
-                    cmd.at_post_execute()
-                except CommandException as e:
-                    cmd.msg(str(e))
-                except Exception as e:
-                    cmd.msg(text=f"EXCEPTION: {str(e)}")
-                    traceback.print_exc(file=sys.stdout)
-                self.cmd = None
-            else:
-                self.enactor.msg('Huh?  (Type "help" for help.)')
-        except Exception as e:
-            print(f"Something foofy happened: {e}")
+            cmd.msg(text=f"EXCEPTION: {str(e)}")
             traceback.print_exc(file=sys.stdout)
 
     def execute_script_actions(self):

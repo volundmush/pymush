@@ -121,7 +121,6 @@ class Importer:
                 if new.account:
                     account = new.account
                     if 'WIZARD' in old.flags:
-                        print(f"SETTING ADMIN LEVEL FOR {account}")
                         account.admin_level = max(account.admin_level, 10)
                     elif 'ROYALTY' in old.flags:
                         account.admin_level = max(account.admin_level, 8)

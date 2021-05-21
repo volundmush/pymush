@@ -3,9 +3,9 @@ import datetime
 from . base import MushCommand, CommandException, PythonCommandMatcher, Command
 from rich.text import Text
 from athanor.utils import partial_match
-from athanor_server.utils import formatter as fmt
-from athanor_server.utils.text import duration_format, red_yellow_green, percent_cap
-from athanor_server.utils import validatorfuncs as valid
+from pymush.utils import formatter as fmt
+from pymush.utils.text import duration_format, red_yellow_green, percent_cap
+from pymush.utils import validatorfuncs as valid
 
 
 class ACreateCommand(MushCommand):
@@ -18,22 +18,23 @@ class ACreateCommand(MushCommand):
 
     def execute(self):
         name = self.gather_arg(stop_at='=')
-        name = name.clean
+        name = name.plain
         password = self.gather_arg(noeval=True)
-        password = password.clean
+        password = password.plain
         if not (name and password):
             raise CommandException("Usage: @acreate <name>=<password>")
-        hash = CRYPT_CON.hash(password)
-        namespace = self.enactor.core.namespace_prefix['A']
-        account, error = self.core.mapped_typeclasses["account"].create(name=name, namespace=namespace)
+        hash = self.entry.user.game.crypt_con.hash(password)
+        account, error = self.entry.user.game.create_object(type_name='USER', name=name)
         if error:
             raise CommandException(error)
         account.set_password(hash, nohash=True)
         self.msg(text=f"Account {account.name} created!")
 
     @classmethod
-    def access(cls, enactor):
-        return enactor.get_slevel() >= 8
+    def access(cls, entry):
+        if entry.session:
+            return entry.session.get_alevel() >= 8
+        return entry.enactor.get_alevel() >= 8
 
 
 class PasswordCommand(MushCommand):
@@ -50,14 +51,18 @@ class PasswordCommand(MushCommand):
     def execute(self):
         old_pass = self.gather_arg(stop_at='=', noeval=True)
         new_pass = self.gather_arg(noeval=True)
-        old_pass = old_pass.clean
-        new_pass = new_pass.clean
+        old_pass = old_pass.plain
+        new_pass = new_pass.plain
         if not (old_pass and new_pass):
             raise CommandException("Usage: @password <old>=<new>")
-        if not self.enactor.verify_password(old_pass):
+        if not self.entry.user.check_password(old_pass):
             raise CommandException("Incorrect password!")
-        self.enactor.set_password(new_pass)
+        self.entry.user.change_password(new_pass)
         self.msg(text="Your password has been changed.")
+
+    @classmethod
+    def access(cls, entry):
+        return bool(entry.session)
 
 
 class NewPassCommand(MushCommand):

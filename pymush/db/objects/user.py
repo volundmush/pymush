@@ -6,6 +6,9 @@ class User(GameObject):
     type_name = 'USER'
     unique_names = True
 
+    def listeners(self):
+        return self.account_sessions
+
     @property
     def email(self) -> Optional[str]:
         return self.sys_attributes.get('email', None)

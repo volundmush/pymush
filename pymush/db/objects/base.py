@@ -85,8 +85,9 @@ class GameObject:
     unique_names = False
 
     __slots__ = ["service", "dbid", "dbref", "name", "parent", "parent_of", "home", "home_of", "db_quota", "cpu_quota",
-                 "zone", "zone_of", "owner", "owner_of", "namespaces", "namespace", "sessions", "connections", "admin_level",
-                 "attributes", "sys_attributes", "location", "contents", "aliases", "created", "modified", "style_holder"]
+                 "zone", "zone_of", "owner", "owner_of", "namespaces", "namespace", "session", "connections",
+                 "admin_level", "attributes", "sys_attributes", "location", "contents", "aliases", "created",
+                 "modified", "style_holder", "account_sessions"]
 
     def __init__(self, service: "GameService", dbref: int, name: str):
         self.service = service
@@ -107,7 +108,8 @@ class GameObject:
         self.owner_of: Set[GameObject] = set()
         self.namespaces: Dict[str, NameSpace] = dict()
         self.namespace: Optional[Tuple[GameObject, str]] = None
-        self.sessions: Set["GameSession"] = set()
+        self.session: Optional["GameSession"] = None
+        self.account_sessions: Set["GameSession"] = set()
         self.connections: Set["Connection"] = set()
         self.attributes = AttributeHandler(self, self.service.attributes)
         self.sys_attributes = dict()
@@ -123,8 +125,10 @@ class GameObject:
 
     @property
     def style(self):
+        if self.session:
+            return self.session.style
         if not self.style_holder:
-            self.style_holder = StyleHandler(self)
+            self.style_holder = StyleHandler(self, save=True)
         return self.style_holder
 
     @property
@@ -166,7 +170,9 @@ class GameObject:
         return out
 
     def listeners(self):
-        return self.sessions if self.sessions else []
+        if self.session:
+            return [self.session]
+        return []
 
     def parser(self):
         return Parser(self.core, self.objid, self.objid, self.objid)
@@ -184,3 +190,12 @@ class GameObject:
 
     def receive_msg(self, message: fmt.FormatList):
         pass
+
+    def get_alevel(self, ignore_quell=False):
+        if self.session:
+            return self.session.get_alevel(ignore_quell=ignore_quell)
+
+        if self.owner:
+            return self.owner.admin_level
+        else:
+            return self.admin_level

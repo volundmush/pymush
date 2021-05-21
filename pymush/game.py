@@ -26,7 +26,7 @@ class GameService(Service):
         self.out_events: Optional[asyncio.Queue] = None
         self.obj_classes = self.app.classes['gameobject']
         self.type_index = defaultdict(set)
-        self.crypt_con = crypt_con = CryptContext(schemes=['argon2'])
+        self.crypt_con = CryptContext(schemes=['argon2'])
         self.command_matchers = dict()
         self.option_classes = dict()
 
