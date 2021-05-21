@@ -1,14 +1,15 @@
 from athanor.app import Service
 import asyncio
-from typing import Optional, Union, Dict, Set, List, Iterable
+from typing import Optional, Iterable
 from .engine.cmdqueue import CmdQueue
 from collections import OrderedDict, defaultdict
-from .db.gameobject import GameSession, GameObject
+from pymush.db.objects.base import GameObject
 from .db.attributes import AttributeManager, SysAttributeManager
 from passlib.context import CryptContext
 from athanor.utils import import_from_module
 import time
 from .utils.misc import callables_from_module
+from athanor.utils import partial_match
 
 
 class GameService(Service):
@@ -20,7 +21,7 @@ class GameService(Service):
         self.objects: OrderedDict[int, GameObject] = OrderedDict()
         self.attributes = AttributeManager(self)
         self.sysattributes = SysAttributeManager(self)
-        self.sessions: OrderedDict[int, GameSession] = OrderedDict()
+        self.sessions: OrderedDict[int, "GameSession"] = OrderedDict()
         self.in_events: Optional[asyncio.Queue] = None
         self.out_events: Optional[asyncio.Queue] = None
         self.obj_classes = self.app.classes['gameobject']
@@ -47,7 +48,6 @@ class GameService(Service):
             results = callables_from_module(path)
             if results:
                 self.option_classes.update(results)
-
 
     async def async_setup(self):
         pass
@@ -118,3 +118,8 @@ class GameService(Service):
             if (found := partial_match(name, self.users.values(), key=lambda x: x.name)):
                 return found, None
         return None, f"Sorry, nothing matches: {name}"
+
+    def create_or_join_session(self, connection: "Connection", character: "GameObject"):
+        if not (sess := self.sessions.get(character.dbid, None)):
+            sess = self.app.classes['game']['gamesession'](connection.user, character)
+        connection.join_session(sess)

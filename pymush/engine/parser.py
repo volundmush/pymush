@@ -32,8 +32,8 @@ class Parser:
     re_q_old = re.compile(r"(?i)^%q(?P<q>[A-Z0-9])")
     re_q_named = re.compile(r"(?i)^%q<(?P<q>\w+)>")
 
-    def __init__(self, core, enactor, executor, caller):
-        self.core = core
+    def __init__(self, queue, enactor, executor, caller):
+        self.queue = queue
         self.enactor = enactor
         self.executor = executor
         self.caller = caller
@@ -70,7 +70,7 @@ class Parser:
             return '%', text[1:]
 
     def find_function(self, funcname: str):
-        return self.core.functions.get(funcname.lower(), None)
+        return self.queue.service.functions.get(funcname.lower(), None)
 
     def evaluate(self, text: str, localize: bool = False, spoof: str = None, called_recursively: bool = False, stop_at=None,
                  recurse=True, substitute=True, functions=True, curly_literals=True, noeval=False, executor=None, number_args=None):

@@ -12,7 +12,7 @@ class Command:
     help_category = None
 
     @classmethod
-    def access(cls, enactor):
+    def access(cls, entry: "QueueEntry"):
         """
         This returns true if <enactor> is able to see and use this command.
 
@@ -22,18 +22,18 @@ class Command:
         return True
 
     @classmethod
-    def help(cls, enactor):
+    def help(cls, entry):
         """
         This is called by the command-help system if help is called on this command.
         """
         if cls.__doc__:
-            out = fmt.FormatList(enactor)
+            out = fmt.FormatList(entry.enactor)
             out.add(fmt.Header(f"Help: {cls.name}"))
             out.add(fmt.Line(cls.__doc__))
             out.add(fmt.Footer())
-            enactor.send(out)
+            entry.enactor.send(out)
         else:
-            enactor.msg(text="Help is not implemented for this command.")
+            entry.enactor.msg(text="Help is not implemented for this command.")
 
     @classmethod
     def match(cls, enactor, text):
@@ -47,13 +47,12 @@ class Command:
         if (result := cls.re_match.fullmatch(text)):
             return result
 
-    def __init__(self, enactor, match_obj):
+    def __init__(self, entry, match_obj):
         """
         Instantiates the command.
         """
-        self.enactor = enactor
         self.match_obj = match_obj
-        self.entry = None
+        self.entry = entry
         self.parser = None
         self.service = None
 
@@ -69,7 +68,10 @@ class Command:
         pass
 
     def msg(self, text=None, **kwargs):
-        self.enactor.msg(text=text, **kwargs)
+        self.entry.enactor.msg(text=text, **kwargs)
+
+    def send(self, message):
+        self.entry.enactor.send(message)
 
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.name}>"
@@ -91,7 +93,7 @@ class MushCommand(Command):
         return result
 
     @classmethod
-    def match(cls, enactor, text):
+    def match(cls, entry, text):
         """
         Called by the CommandGroup to determine if this command matches.
         Returns False or a Regex Match object.
@@ -111,8 +113,8 @@ class MushCommand(Command):
         if (result := matcher.fullmatch(text)):
             return result
 
-    def __init__(self, enactor, match_obj, group):
-        super().__init__(enactor, match_obj, group)
+    def __init__(self, entry, match_obj):
+        super().__init__(entry, match_obj)
         self.mdict = self.match_obj.groupdict()
         self.cmd = self.mdict["cmd"]
         self.args = self.mdict["args"]
@@ -128,7 +130,7 @@ class BaseCommandMatcher:
         self.at_cmdmatcher_creation()
 
     @classmethod
-    def access(self, enactor):
+    def access(self, entry: "QueueEntry"):
         return True
 
     def at_cmdmatcher_creation(self):
@@ -138,10 +140,10 @@ class BaseCommandMatcher:
         """
         pass
 
-    def match(self, enactor, text):
+    def match(self, entry: "QueueEntry", text: str):
         pass
 
-    def populate_help(self, enactor, data):
+    def populate_help(self, entry: "QueueEntry", data):
         pass
 
     def __repr__(self):
@@ -157,12 +159,12 @@ class PythonCommandMatcher(BaseCommandMatcher):
     def add(self, cmd_class):
         self.cmds.add(cmd_class)
 
-    def match(self, enactor, text):
+    def match(self, entry: "QueueEntry", text: str):
         for cmd in self.cmds:
-            if cmd.access(enactor) and (result := cmd.match(enactor, text)):
-                return cmd(enactor, result)
+            if cmd.access(entry) and (result := cmd.match(entry, text)):
+                return cmd(entry, result)
 
-    def populate_help(self, enactor, data):
+    def populate_help(self, entry: "QueueEntry", data):
         for cmd in self.cmds:
-            if cmd.help_category and cmd.access(enactor):
+            if cmd.help_category and cmd.access(entry):
                 data[cmd.help_category].add(cmd)

@@ -1,10 +1,10 @@
 from rich.text import Text
-from ..utils.evtable import EvTable as _EvTable
 from ..utils.text import tabular_table
 import math
 from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style
 from typing import Optional
 from rich import box, table
+
 
 class BaseFormatter:
 
@@ -121,10 +121,12 @@ class Line(BaseFormatter):
     """
     
     def __init__(self, text):
+        super().__init__()
         self.data = text
         
     def text(self, formatter, conn: "Connection", user: Optional["User"] = None,
              character: Optional["GameObject"] = None):
+        conn.data = self.data
         conn.print(self.data)
 
 

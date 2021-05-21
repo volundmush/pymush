@@ -68,7 +68,7 @@ class CharSelectCommand(Command):
 
     def execute(self):
         mdict = self.match_obj.groupdict()
-        acc = self.enactor.relations.get('account', None)
+        acc = self.entry.user
         if not (chars := acc.characters):
             raise CommandException("No characters to join the game as!")
         if not (args := mdict.get("args", None)):
@@ -78,14 +78,7 @@ class CharSelectCommand(Command):
         if not (found := partial_match(args, chars, key=lambda x: x.name)):
             self.msg(text=f"Sorry, no character found named: {args}")
             return
-        if not (pview := found.playviews.all()):
-            pview, errors = self.core.mapped_typeclasses['playview'].create(objid=f"playview_{found.objid}")
-            if errors:
-                raise CommandException(errors)
-            pview.at_playview_creation(found, self.enactor)
-        else:
-            pview = pview[0]
-        self.enactor.join(pview)
+        self.entry.game.create_or_join_session(self.entry.connection, found)
 
 
 class SelectScreenCommand(Command):

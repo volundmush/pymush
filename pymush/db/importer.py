@@ -109,24 +109,19 @@ class Importer:
                     new.home = destination
                     destination.home_of.add(new)
                 if (location := self.obj_map.get(old.exits, None)):
-                    new.location = (location, 'exits', None)
-                    #location.contents.add('exits', new, None)
+                    location.contents.add('exits', new, None)
             else:
                 if (location := self.obj_map.get(old.location, None)):
-                    new.location = (location, '', None)
-                    #location.contents.add('', new, None)
+                    location.contents.add('', new, None)
 
 
     def process_finalize(self):
         for old, new in self.old_new.items():
             if old.type == 8:
-                if new.parent and new.parent.type_name == 'USER':
-                    account = new.parent
-                    new.owner = account
-                    new.parent = None
-                    account.parent_of.remove(new)
-                    account.owner_of.add(new)
+                if new.account:
+                    account = new.account
                     if 'WIZARD' in old.flags:
+                        print(f"SETTING ADMIN LEVEL FOR {account}")
                         account.admin_level = max(account.admin_level, 10)
                     elif 'ROYALTY' in old.flags:
                         account.admin_level = max(account.admin_level, 8)

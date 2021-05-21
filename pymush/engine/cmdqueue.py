@@ -3,10 +3,10 @@ import time
 from collections import OrderedDict
 from .commands.base import CommandException
 import traceback
-from typing import Optional, Union, List, Set
+from typing import Optional, Set
 from enum import IntEnum
 from athanor_server.conn import Connection
-from pymush.db.gameobject import GameObject, GameSession
+from pymush.db.objects.base import GameObject
 import asyncio
 
 
@@ -27,6 +27,7 @@ class QueueEntry:
         self.executor: Optional[GameObject] = None
         self.caller: Optional[GameObject] = None
         self.spoof: Optional[GameObject] = None
+        self.session: Optional["GameSession"] = None
         self.actions: str = ""
         self.connection: Optional[Connection] = None
         self.parser = None
@@ -42,9 +43,14 @@ class QueueEntry:
         self.wait: Optional[float] = None
         self.created: Optional[float] = None
 
+    @property
+    def game(self):
+        return self.queue.service
+
     @classmethod
     def from_login(cls, conn: Connection, command: str) -> "QueueEntry":
         entry = cls(QueueEntryType.LOGIN)
+        entry.enactor = conn
         entry.connection = conn
         entry.actions = command
         return entry
@@ -62,10 +68,11 @@ class QueueEntry:
         return entry
 
     @classmethod
-    def from_session(cls, sess: GameSession, command: str, connection: Optional[Connection] = None) -> "QueueEntry":
+    def from_session(cls, sess: "GameSession", command: str, connection: Optional[Connection] = None) -> "QueueEntry":
         entry = cls(QueueEntryType.SESSION)
         if connection:
             entry.connection = connection
+        entry.session = sess
         entry.user = sess.user
         entry.enactor = sess.puppet
         entry.executor = sess.puppet
@@ -184,7 +191,33 @@ class QueueEntry:
             traceback.print_exc(file=sys.stdout)
 
     def execute_session_actions(self):
-        pass
+        try:
+            cmd = None
+            for matcher in self.queue.service.command_matchers.get('session', list()):
+                print(f"checking {matcher}")
+                cmd = matcher.match(self, self.actions)
+                if cmd:
+                    break
+            if cmd:
+                cmd.service = self.queue.service
+                self.cmd = cmd
+                cmd.entry = self
+                cmd.parser = self.parser
+                try:
+                    cmd.at_pre_execute()
+                    cmd.execute()
+                    cmd.at_post_execute()
+                except CommandException as e:
+                    cmd.msg(str(e))
+                except Exception as e:
+                    cmd.msg(text=f"EXCEPTION: {str(e)}")
+                    traceback.print_exc(file=sys.stdout)
+                self.cmd = None
+            else:
+                self.enactor.msg('Huh?  (Type "help" for help.)')
+        except Exception as e:
+            print(f"Something foofy happened: {e}")
+            traceback.print_exc(file=sys.stdout)
 
     def execute_script_actions(self):
         pass

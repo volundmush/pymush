@@ -1,8 +1,7 @@
-from athanor.shared import ConnectionDetails, MudProtocol, ConnectionInMessage, ConnectionInMessageType
+from athanor.shared import ConnectionDetails, ConnectionInMessage, ConnectionInMessageType
 from athanor.shared import ConnectionOutMessage, ConnectionOutMessageType, ColorSystem
 from typing import Optional, Set, List, Dict, Union
 from mudstring.patches.console import MudConsole
-from mudstring.util import OutBuffer
 from rich.color import ColorSystem
 from athanor_server.conn import Connection as BaseConnection
 import time
@@ -99,6 +98,7 @@ class Connection(BaseConnection):
 
     def login(self, account: "GameObject"):
         self.user = account
+        account.last_login = time.time()
         account.connections.add(self)
         self.receive_msg(render_select_screen(self))
 
@@ -107,3 +107,52 @@ class Connection(BaseConnection):
         if user:
             self.user = None
             user.connections.remove(self)
+
+    def join_session(self, session: "GameSession"):
+        session.connections.add(self)
+        self.session = session
+        self.on_join_session(session)
+        if len(session.connections) == 1:
+            session.on_first_connection(self)
+
+    def on_join_session(self, session: "GameSession"):
+        pass
+
+
+class GameSession:
+
+    def __init__(self, user: "GameObject", character: "GameObject"):
+        self.user: "GameObject" = user
+        self.character: "GameObject" = character
+        self.puppet: "GameObject" = character
+        self.connections: Set["Connection"] = set()
+        self.in_events: List[ConnectionInMessage] = list()
+        self.out_events: List[ConnectionOutMessage] = list()
+        self.quelled = True
+        self.character.sessions.add(self)
+
+    def get_alevel(self, ignore_quell=False):
+        if self.quelled and not ignore_quell:
+            return min(self.user.admin_level, self.character.admin_level)
+        return self.user.admin_level
+
+    @property
+    def style(self):
+        return self.user.style
+
+    def msg(self, text, **kwargs):
+        flist = fmt.FormatList(self, **kwargs)
+        flist.add(fmt.Line(text))
+        self.send(flist)
+
+    def send(self, message: fmt.FormatList):
+        self.receive_msg(message)
+        for listener in self.connections:
+            if listener not in message.relay_chain:
+                listener.send(message.relay(self))
+
+    def receive_msg(self, message: fmt.FormatList):
+        pass
+
+    def on_first_connection(self, connection: "Connection"):
+        pass

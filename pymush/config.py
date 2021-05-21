@@ -21,27 +21,29 @@ class Config(BaseConfig):
     def _config_classes(self):
         super()._config_classes()
         self.classes['game']['connection'] = "pymush.conn.Connection"
-        self.classes["game"]["gameobject"] = "pymush.db.gameobject.GameObject"
+        self.classes["game"]["gameobject"] = "pymush.db.objects.base.GameObject"
+        self.classes["game"]["gamesession"] = "pymush.conn.GameSession"
         self.classes['services']['game'] = "pymush.game.GameService"
-        self.classes['gameobject']['ALLIANCE'] = 'pymush.db.gameobject.Alliance'
-        self.classes['gameobject']['BOARD'] = 'pymush.db.gameobject.Board'
-        self.classes['gameobject']['CHANNEL'] = 'pymush.db.gameobject.Channel'
-        self.classes['gameobject']['DIMENSION'] = 'pymush.db.gameobject.Dimension'
-        self.classes['gameobject']['DISTRICT'] = 'pymush.db.gameobject.District'
-        self.classes['gameobject']['EXIT'] = 'pymush.db.gameobject.Exit'
-        self.classes['gameobject']['FACTION'] = 'pymush.db.gameobject.Faction'
-        self.classes['gameobject']['GATEWAY'] = 'pymush.db.gameobject.Gateway'
-        self.classes['gameobject']['HEAVENLYBODY'] = 'pymush.db.gameobject.HeavenlyBody'
-        self.classes['gameobject']['ITEM'] = 'pymush.db.gameobject.Item'
-        self.classes['gameobject']['MOBILE'] = 'pymush.db.gameobject.Mobile'
-        self.classes['gameobject']['PLAYER'] = 'pymush.db.gameobject.Player'
-        self.classes['gameobject']['ROOM'] = 'pymush.db.gameobject.Room'
-        self.classes['gameobject']['SECTOR'] = 'pymush.db.gameobject.Sector'
-        self.classes['gameobject']['THING'] = 'pymush.db.gameobject.Thing'
-        self.classes['gameobject']['USER'] = 'pymush.db.gameobject.User'
-        self.classes['gameobject']['VEHICLE'] = 'pymush.db.gameobject.Vehicle'
-        self.classes['gameobject']['WILDERNESS'] = 'pymush.db.gameobject.Wilderness'
-        self.classes['gameobject']['ZONE'] = 'pymush.db.gameobject.Zone'
+
+        self.classes['gameobject']['ALLIANCE'] = 'pymush.db.objects.alliance.Alliance'
+        self.classes['gameobject']['BOARD'] = 'pymush.db.objects.board.Board'
+        self.classes['gameobject']['CHANNEL'] = 'pymush.db.objects.channel.Channel'
+        self.classes['gameobject']['DIMENSION'] = 'pymush.db.objects.dimension.Dimension'
+        self.classes['gameobject']['DISTRICT'] = 'pymush.db.objects.district.District'
+        self.classes['gameobject']['EXIT'] = 'pymush.db.objects.exit.Exit'
+        self.classes['gameobject']['FACTION'] = 'pymush.db.objects.faction.Faction'
+        self.classes['gameobject']['GATEWAY'] = 'pymush.db.objects.gateway.Gateway'
+        self.classes['gameobject']['HEAVENLYBODY'] = 'pymush.db.objects.heavenlybody.HeavenlyBody'
+        self.classes['gameobject']['ITEM'] = 'pymush.db.objects.item.Item'
+        self.classes['gameobject']['MOBILE'] = 'pymush.db.objects.mobile.Mobile'
+        self.classes['gameobject']['PLAYER'] = 'pymush.db.objects.player.Player'
+        self.classes['gameobject']['ROOM'] = 'pymush.db.objects.room.Room'
+        self.classes['gameobject']['SECTOR'] = 'pymush.db.objects.sector.Sector'
+        self.classes['gameobject']['THING'] = 'pymush.db.objects.thing.Thing'
+        self.classes['gameobject']['USER'] = 'pymush.db.objects.user.User'
+        self.classes['gameobject']['VEHICLE'] = 'pymush.db.objects.vehicle.Vehicle'
+        self.classes['gameobject']['WILDERNESS'] = 'pymush.db.objects.wilderness.Wilderness'
+        self.classes['gameobject']['ZONE'] = 'pymush.db.objects.zone.Zone'
 
     def _config_regex(self):
         self.regex['basic_name'] = re.compile(r"(?s)^(\w|\.|-| |'|_)+$")
@@ -53,6 +55,9 @@ class Config(BaseConfig):
         }
         self.command_matchers['selectscreen'] = {
             'selectscreen': 'pymush.engine.commands.selectscreen.SelectCommandMatcher'
+        }
+        self.command_matchers['session'] = {
+            'session': 'pymush.engine.commands.session.SessionCommandMatcher'
         }
 
     def _config_styles(self):

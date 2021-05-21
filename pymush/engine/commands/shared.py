@@ -5,6 +5,7 @@ import traceback
 from athanor.utils import partial_match
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
 
+
 class PyCommand(Command):
     name = '@py'
     re_match = re.compile(r"^(?P<cmd>@py)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
@@ -12,9 +13,10 @@ class PyCommand(Command):
 
     def available_vars(self):
         return {
+            'entry': self.entry,
             'parser': self.parser,
-            'enactor': self.enactor,
-            'connection': self.enactor,
+            'enactor': self.entry.enactor,
+            'connection': self.entry.connection,
             "game": self.service,
             "app": self.service.app
         }
@@ -27,8 +29,7 @@ class PyCommand(Command):
         pass
 
     def write(self, text):
-        self.caller.msg(text=text.rsplit("\n", 1)[0])
-
+        self.msg(text=text.rsplit("\n", 1)[0])
 
     def execute(self):
         mdict = self.match_obj.groupdict()
@@ -54,13 +55,13 @@ class PyCommand(Command):
                 pycode_compiled = compile(args, "", mode)
 
             measure_time = True
-            duration = ""
+
             if measure_time:
                 t0 = time.time()
                 ret = eval(pycode_compiled, {}, self.available_vars())
                 t1 = time.time()
                 duration = " (runtime ~ %.4f ms)" % ((t1 - t0) * 1000)
-                self.enactor.msg(text=duration)
+                self.msg(text=duration)
             else:
                 ret = eval(pycode_compiled, {}, self.available_vars())
 
@@ -83,4 +84,4 @@ class PyCommand(Command):
             # with a outputfunc structure)
             ret = str(ret)
 
-        self.enactor.msg(text=repr(ret))
+        self.msg(text=repr(ret))

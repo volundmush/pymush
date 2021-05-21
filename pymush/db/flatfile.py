@@ -4,6 +4,7 @@ from collections import defaultdict
 from athanor.utils import partial_match
 from mudstring.encodings.pennmush import decode
 
+
 class FlatLine:
 
     def __init__(self, text: str):

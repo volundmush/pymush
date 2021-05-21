@@ -24,7 +24,6 @@ def render_select_screen(connection):
             t2.add_row(f"{c.client_id}", f"{str(c.details.protocol)}", f"{c.details.host_address}", "", f"{c.details.client_name}", f"{c.details.width}")
         out.add(t2)
 
-
     if (chars := acc.characters):
         out.add(fmt.Subheader("Characters"))
         t3 = fmt.Table()
@@ -33,7 +32,6 @@ def render_select_screen(connection):
         for c in chars:
             t3.add_row(f"{c.dbid}", send_menu(c.name, ((f'@ic {c.name}', f"Join the game as {c.name}"), (f"@examine {c.name}", f"@examine {c.name}"))))
         out.add(t3)
-
 
     out.add(fmt.Subheader("Commands"))
 

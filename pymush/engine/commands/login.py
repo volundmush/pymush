@@ -4,7 +4,7 @@ import time
 import traceback
 from athanor.utils import partial_match
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
-from mudstring.encodings.pennmush import ansi_fun
+from mudstring.encodings.pennmush import ansi_fun, send_menu
 from . shared import PyCommand
 
 
@@ -61,7 +61,7 @@ class ConnectCommand(_LoginCommand):
             raise CommandException("Sorry, that was an incorrect username or password.")
         if not account.check_password(password):
             raise CommandException("Sorry, that was an incorrect username or password.")
-        self.enactor.login(account)
+        self.entry.connection.login(account)
 
 
 class CreateCommand(_LoginCommand):
@@ -90,7 +90,6 @@ class CreateCommand(_LoginCommand):
         self.msg(text="Account created! You can login with " + ansi_fun('hw', cmd))
 
 
-
 class QuitCommand(Command):
     """
     Disconnects this connection from the game.
@@ -100,16 +99,16 @@ class QuitCommand(Command):
     help_category = 'System'
 
     def execute(self):
-        if (pview := self.enactor.relations.get('playview', None)):
+        if (pview := self.entry.enactor.relations.get('playview', None)):
             mdict = self.match_obj.groupdict()
             args = mdict.get('args', "")
             if args is None or not args.upper().startswith('FORCE'):
                 raise CommandException("Use QUIT FORCE to disconnect while IC. This may leave your character linkdead for a time. Use @ooc then QUIT to cleanly logout.")
-        out = fmt.FormatList(self.enactor)
-        out.add(fmt.Text("See you again!"))
+        out = fmt.FormatList(self.entry.enactor)
+        out.add(fmt.Line("See you again!"))
         out.disconnect = True
         out.reason = 'quit'
-        self.enactor.send(out)
+        self.send(out)
 
 
 class PennConnect(_LoginCommand):
@@ -142,7 +141,7 @@ class PennConnect(_LoginCommand):
             raise CommandException("Sorry, that was an incorrect username or password.")
         if not (acc := character.account):
             raise CommandException("Character found! However this character has no account. To continue, create an account and bind the character after logging in.")
-        self.enactor.login(acc)
+        self.entry.connection.login(acc)
 
         self.msg(text=f"Your Account password has been set to the password you entered just now.\n"
                       f"Next time, you can login using the normal connect command.\n"
@@ -157,19 +156,10 @@ class PennConnect(_LoginCommand):
 class LoginPyCommand(PyCommand):
 
     @classmethod
-    def access(cls, enactor):
-        if enactor.game.objects:
-            return True
+    def access(cls, entry):
+        #if entry.game.objects:
+        #    return False
         return True
-
-    def available_vars(self):
-        return {
-            'parser': self.parser,
-            'enactor': self.enactor,
-            'connection': self.enactor,
-            "game": self.service,
-            "app": self.service.app
-        }
 
 
 class ImportCommand(Command):
@@ -178,14 +168,31 @@ class ImportCommand(Command):
     help_category = 'System'
 
     @classmethod
-    def access(cls, enactor):
+    def access(cls, entry):
+        if entry.game.objects:
+            return False
         return True
 
     def execute(self):
-        mdict = self.match_obj.groupdict()
-        penn = Importer(self.enactor, 'outdb')
+        penn = Importer(self.entry.enactor, 'outdb')
         self.msg(f"Database loaded: {len(penn.db.objects)} objects detected!")
         penn.run()
+
+
+class Test(Command):
+    name = "test"
+    re_match = re.compile(r"^(?P<cmd>test)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
+
+    @classmethod
+    def access(cls, entry):
+        return True
+
+    def execute(self):
+        menu = send_menu("testing", (("testing", "testing"),))
+        self.entry.enactor.menu = menu
+        out = fmt.FormatList(self.entry.enactor)
+        out.add(fmt.Line(menu))
+        self.entry.enactor.send(out)
 
 
 class LoginCommandMatcher(PythonCommandMatcher):
@@ -199,6 +206,7 @@ class LoginCommandMatcher(PythonCommandMatcher):
         self.add(PennConnect)
         self.add(LoginPyCommand)
         self.add(ImportCommand)
+        self.add(Test)
 
 
 class ConnectionCommandMatcher(PythonCommandMatcher):
