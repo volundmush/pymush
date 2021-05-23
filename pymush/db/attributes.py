@@ -1,7 +1,7 @@
 import sys
 from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Set
-from rich.text import Text
+from mudstring.patches.text import MudText
 
 
 @dataclass
@@ -49,8 +49,9 @@ class SysAttributeManager(AttributeManager):
 @dataclass
 class AttributeValue:
     attribute: Attribute
-    value: Text
+    value: MudText
 
+EMPTY = MudText("")
 
 class AttributeHandler:
 
@@ -65,7 +66,7 @@ class AttributeHandler:
             return self.attributes.get(attr, None)
         return None
 
-    def set_or_create(self, name: str, value: Text):
+    def set_or_create(self, name: str, value: MudText):
         attr = self.manager.get_or_create(name)
         if attr:
             val = self.attributes.get(attr, None)
@@ -77,3 +78,10 @@ class AttributeHandler:
 
     def wipe(self, pattern):
         pass
+
+    def get_value(self, name: str) -> MudText:
+        attr = self.get(name)
+        if attr is None:
+            return EMPTY
+        else:
+            return attr.value

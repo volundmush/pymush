@@ -5,6 +5,7 @@ from typing import Optional
 class Player(GameObject):
     type_name = 'PLAYER'
     unique_names = True
+    cmd_matchers = ('mobile',)
 
     @property
     def account(self):
@@ -20,3 +21,9 @@ class Player(GameObject):
             self.sys_attributes['account'] = int(account)
         else:
             self.sys_attributes.pop('account', None)
+
+    def generate_identifers_name_for(self, viewer):
+        if self.game.app.config.dub_system:
+            return self.get_dub_or_keyphrase_for(viewer)
+        else:
+            return self.name

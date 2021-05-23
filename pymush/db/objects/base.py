@@ -1,12 +1,14 @@
 import sys
 from typing import Union, Set, Optional, List, Dict, Tuple, Iterable
-from athanor.utils import lazy_property
+from athanor.utils import lazy_property, partial_match
 from pymush.db.attributes import AttributeHandler
 from athanor.shared import ConnectionOutMessage, ConnectionOutMessageType, ConnectionInMessageType, ConnectionInMessage
 from pymush.utils import formatter as fmt
 from pymush.utils.styling import StyleHandler
 from collections import defaultdict
-
+from mudstring.patches.text import MudText
+from mudstring.encodings.pennmush import ansi_fun, send_menu
+import re
 
 class NameSpace:
 
@@ -75,7 +77,7 @@ class ContentsHandler:
             obj.location = None
 
     def all(self, name=None):
-        if name:
+        if name is not None:
             return self.inventories[name].all()
         return self.reverse.keys()
 
@@ -83,6 +85,8 @@ class ContentsHandler:
 class GameObject:
     type_name = None
     unique_names = False
+    re_search = re.compile(r"(?i)^(?P<pre>(?P<quant>all|\d+)\.)?(?P<target>[A-Z0-9_.-]+)")
+    cmd_matchers = []
 
     __slots__ = ["service", "dbid", "dbref", "name", "parent", "parent_of", "home", "home_of", "db_quota", "cpu_quota",
                  "zone", "zone_of", "owner", "owner_of", "namespaces", "namespace", "session", "connections",
@@ -174,9 +178,6 @@ class GameObject:
             return [self.session]
         return []
 
-    def parser(self):
-        return Parser(self.core, self.objid, self.objid, self.objid)
-
     def msg(self, text, **kwargs):
         flist = fmt.FormatList(self, **kwargs)
         flist.add(fmt.Line(text))
@@ -199,3 +200,194 @@ class GameObject:
             return self.owner.admin_level
         else:
             return self.admin_level
+
+    def get_dub(self, target):
+        dubs = self.sys_attributes.get('dubs', dict())
+        return dubs.get((target.dbid, target.created), None)
+
+    def set_sub(self, target, value: str):
+        dubs = self.sys_attributes.get('dubs', dict())
+        if value:
+            dubs[(target.dbid, target.created)] = value
+        else:
+            dubs.pop((target.dbid, target.created), None)
+        self.sys_attributes['dubs'] = dubs
+
+    def generate_identifers_name_for(self, viewer):
+        return self.name
+
+    def get_keyphrase_for(self, viewer):
+        return self.name
+
+    def get_dub_or_keyphrase_for(self, viewer):
+        dubbed = viewer.get_dub(self)
+        if dubbed:
+            return dubbed
+        return self.get_keyphrase_for(viewer)
+
+    def generate_identifiers_for(self, viewer, names=True, aliases=True, nicks=True):
+        whole, words = list(), list()
+        if names:
+            identifiers = self.generate_identifers_name_for(viewer)
+            whole.append(identifiers)
+            words.extend(identifiers.split())
+        if aliases:
+            for alias in self.aliases:
+                whole.append(alias)
+                words.extend(alias.split())
+        if nicks:
+            pass
+        return whole, words
+
+    def locate_object(self, name: str, general=True, dbref=True, location=True, contents=True, candidates=None,
+                      use_names=True, use_nicks=True, use_aliases=True, use_dub=True, exact=False, first_only=False,
+                      multi_match=False, filter_visible=True):
+        name = name.strip()
+        nlower = name.lower()
+        out = list()
+
+        loc = None
+        if location is True:
+            loc = self.location[0] if self.location else None
+        elif location:
+            loc = location
+
+        if general:
+            dict_check = {
+                'self': self,
+                'me': self,
+                'here': loc
+            }
+
+            if (found := dict_check.get(nlower, None)):
+                out.append(found)
+                return out, None
+
+        if dbref and name.startswith('#'):
+            found, err = self.game.locate_dbref(name)
+            if found:
+                out.append(found)
+                return out, None
+            else:
+                return None, err
+
+        quant = None
+        if multi_match and '|' in name:
+            quant_str, name = name.split('|', 1)
+            quant_str = quant_str.strip().lower()
+            if quant_str == 'all':
+                quant = -1
+            elif quant_str.isdigit():
+                quant = max(int(quant_str), 1)
+            else:
+                return None, f"Unknown quantifier: {quant_str}"
+
+        quoted = name.startswith('"') and name.endswith('"')
+        name = name.strip('"')
+
+        total_candidates = set()
+        if candidates:
+            total_candidates.update(candidates)
+        if location and loc:
+            total_candidates.update(loc.contents.all())
+        if contents:
+            total_candidates.update(self.contents.all())
+        if self in total_candidates:
+            total_candidates.remove(self)
+
+        if filter_visible:
+            total_candidates = [c for c in total_candidates if self.can_see(c)]
+        else:
+            total_candidates = list(total_candidates)
+
+        keywords = defaultdict(list)
+        full_names = defaultdict(list)
+
+        for can in total_candidates:
+            whole, words = can.generate_identifiers_for(self, names=use_names, aliases=use_aliases, nicks=use_nicks)
+            for word in words:
+                ilower = word.lower()
+                if ilower in ('the', 'of', 'an', 'a', 'or', 'and'):
+                    continue
+                keywords[ilower].append(can)
+            for n in whole:
+                full_names[n.lower()].append(can)
+
+        nlower = name.lower()
+        if exact:
+            if (found := full_names.get(nlower, None)):
+                out.extend(found)
+        else:
+            if quoted:
+                m = partial_match(nlower, full_names.keys())
+                if m:
+                    out.extend(full_names[m])
+            else:
+                m = partial_match(nlower, keywords.keys())
+                if m:
+                    out.extend(keywords[m])
+
+        if not out:
+            return out, "Nothing was found."
+
+        if first_only:
+            out = [out[0]]
+        elif multi_match:
+            if quant is None:
+                quant = 1
+
+            if quant == -1:
+                return out, None
+            else:
+                if len(out) >= quant:
+                    out = [out[quant - 1]]
+                else:
+                    return [], "Nothing was found by that index."
+
+        return out, None
+
+    def can_see(self, target: "GameObject"):
+        return True
+    
+    def render_appearance(self, viewer, parser, internal=False):
+        out = fmt.FormatList(viewer)
+        if (nameformat := self.attributes.get_value('NAMEFORMAT')):
+            result = parser.evaluate(nameformat, executor=self, number_args={0: self.dbref, 1: self.name})
+            out.add(fmt.Line(result))
+        else:
+            out.add(fmt.Line(ansi_fun('hw', self.name) + f" ({self.dbref})"))
+        if internal and (idesc := self.attributes.get_value('IDESCRIBE')):
+            idesc_eval = parser.evaluate(idesc, executor=self)
+            if (idescformat := self.attributes.get_value('IDESCFORMAT')):
+                result = parser.evaluate(idescformat, executor=self, number_args={0: idesc_eval})
+                out.add(fmt.Line(result))
+            else:
+                out.add(fmt.Line(idesc_eval))
+        elif (desc := self.attributes.get_value('DESCRIBE')):
+            desc_eval = parser.evaluate(desc, executor=self)
+            if (descformat := self.attributes.get_value('DESCFORMAT')):
+                result = parser.evaluate(descformat, executor=self, number_args={0: desc_eval})
+                out.add(fmt.Line(result))
+            else:
+                out.add(fmt.Line(desc_eval))
+        if (contents := self.contents.all()):
+            if (conformat := self.attributes.get_value('CONFORMAT')):
+                contents_objids = ' '.join([con.objid for con in contents])
+                result = parser.evaluate(conformat, executor=self, number_args={0: contents_objids})
+                out.add(fmt.Line(result))
+            else:
+                con = [MudText("Contents:")]
+                for obj in contents:
+                    con.append(f" * " + send_menu(ansi_fun('hw', obj.name), [(f'look {obj.name}', 'Look')]) + f" ({obj.dbref})")
+                out.add(fmt.Line(MudText('\n').join(con)))
+        viewer.send(out)
+
+
+    def find_cmd(self, entry: "QueueEntry", cmd_text: str):
+        for matcher_name in self.cmd_matchers:
+            matchers = self.game.command_matchers.get(matcher_name, None)
+            for matcher in matchers:
+                if matcher:
+                    cmd = matcher.match(entry, cmd_text)
+                    if cmd:
+                        return cmd

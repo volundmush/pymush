@@ -17,6 +17,7 @@ class Config(BaseConfig):
         self._config_matchers()
         self._config_styles()
         self._config_option_classes()
+        self._config_game_options()
 
     def _config_classes(self):
         super()._config_classes()
@@ -60,6 +61,11 @@ class Config(BaseConfig):
             'session': 'pymush.engine.commands.session.SessionCommandMatcher'
         }
 
+        self.command_matchers['mobile'] = {
+            'mobile': 'pymush.engine.commands.mobile.MobileCommandMatcher',
+            'exit': 'pymush.engine.commands.mobile.MobileExitMatcher'
+        }
+
     def _config_styles(self):
         self.styles['system'] = {
             "border_color": ("Headers, footers, table borders, etc.", "Color", "m"),
@@ -84,3 +90,6 @@ class Config(BaseConfig):
         self.option_class_modules = [
             'pymush.utils.optionclasses'
         ]
+
+    def _config_game_options(self):
+        self.dub_system = False

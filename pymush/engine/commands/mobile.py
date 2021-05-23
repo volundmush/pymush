@@ -11,11 +11,9 @@ class LookCommand(MushCommand):
         if self.args:
             arg = self.gather_arg()
             if len(arg):
-                loc = self.entry.enactor.relations.get('location', None)
-                candidates = loc.contents.all() if loc else []
-                if (found := self.entry.enactor.search(arg.clean, candidates)):
-                    for f in found:
-                        self.look_at(f)
+                found, err = self.entry.enactor.locate_object(arg.plain, first_only=True, multi_match=True)
+                if found:
+                    self.look_at(found[0])
                 else:
                     raise CommandException("I don't see that here.")
             else:
@@ -24,17 +22,19 @@ class LookCommand(MushCommand):
             self.look_here()
 
     def look_at(self, target):
-        if (loc := self.entry.enactor.relations.get('location', None)):
+        loc = self.entry.enactor.location[0] if self.entry.enactor.location else None
+        if loc:
             if loc == target:
-                loc.render_appearance(self.entry.enactor, internal=True)
+                target.render_appearance(self.entry.enactor, self.entry.parser, internal=True)
             else:
-                target.render_appearance(self.entry.enactor)
+                target.render_appearance(self.entry.enactor, self.entry.parser)
         else:
-            target.render_appearance(self.entry.enactor)
+            target.render_appearance(self.entry.enactor, self.entry.parser)
 
     def look_here(self):
-        if (loc := self.entry.enactor.relations.get('location', None)):
-            loc.render_appearance(self.entry.enactor, internal=True)
+        loc = self.entry.enactor.location[0] if self.entry.enactor.location else None
+        if loc:
+            loc.render_appearance(self.entry.enactor, self.entry.parser, internal=True)
         else:
             raise CommandException("You are nowhere. There's not much to see.")
 
@@ -72,9 +72,8 @@ class MobileExitMatcher(BaseCommandMatcher):
     priority = 110
 
     def match(self, entry, text):
-        if not (loc := entry.enactor.relations.get('location', None)):
-            return
-        if not (exits := [e for e in loc.exits.all() if entry.enactor.can_see(e)]):
+        loc = entry.enactor.location[0] if entry.enactor.location else None
+        if not loc:
             return
 
         if text.lower().startswith('goto '):
@@ -83,10 +82,16 @@ class MobileExitMatcher(BaseCommandMatcher):
             text = text[3:]
 
         if text:
-            if not (found := entry.enactor.search(text, exits)):
+            exits = loc.contents.all('exits')
+            if not exits:
                 return
-            cmd = ExitCommand(entry, found[0])
-            return cmd
+            found, err = entry.enactor.locate_object(text, general=False, dbref=False, location=False, contents=False,
+                                                     candidates=exits, use_nicks=False,
+                                                     use_aliases=True, use_dub=False, first_only=True, multi_match=False)
+            if not found:
+                return
+            else:
+                return ExitCommand(entry, found[0])
 
     def populate_help(self, enactor, data):
         data['Navigation'].add(ExitCommand)

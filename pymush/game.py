@@ -29,6 +29,7 @@ class GameService(Service):
         self.crypt_con = CryptContext(schemes=['argon2'])
         self.command_matchers = dict()
         self.option_classes = dict()
+        self.functions = dict()
 
     @property
     def styles(self):
@@ -62,6 +63,39 @@ class GameService(Service):
         out["attributes"] = self.attributes.serialize()
         out["sysattributes"] = self.attributes.serialize()
         return out
+
+    def locate_dbref(self, text):
+        if not text.startswith('#'):
+            return None, "invalid dbref or objid format! Must start with a #"
+        text = text[1:]
+        objid_str = None
+        if ':' in text:
+            dbid_str, objid_str = text.split(':', 1)
+        else:
+            dbid_str = text
+
+        secs = None
+        try:
+            dbid = int(dbid_str)
+            if objid_str:
+                secs = int(objid_str)
+        except ValueError as err:
+            return None, "Invalid dbref or objid format!"
+
+        if dbid >= 0:
+            found = self.objects.get(dbid, None)
+            if found:
+                if secs is not None:
+                    if secs == int(found.created):
+                        return found, None
+                    else:
+                        return None, "Objid not found!"
+                else:
+                    return found, None
+            else:
+                return None, "Dbref Not Found!"
+        else:
+            return None, "Invalid dbref!"
 
     def create_object(self, type_name: str, name: str, dbid: Optional[int] = None, namespace: Optional[GameObject] = None):
         name = name.strip()

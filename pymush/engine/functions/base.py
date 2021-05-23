@@ -1,4 +1,4 @@
-from rich.text import Text
+from mudstring.patches.text import MudText
 
 
 class BaseFunction:
@@ -10,11 +10,10 @@ class BaseFunction:
     odd_args = False
     eval_args = True
 
-    def __init__(self, entry, called_as, remaining):
-        self.entry = entry
+    def __init__(self, parser, called_as: str, args_data: MudText):
+        self.parser = parser
         self.called_as = called_as
-        self.output = ''
-        self.remaining = remaining
+        self.args_data = args_data
         self.args = list()
         self.args_eval = list()
         self.args_count = 0
@@ -22,45 +21,63 @@ class BaseFunction:
 
     def _err_too_many_args(self, num):
         if self.min_args is not None and self.min_args != self.max_args:
-            self.output = AnsiString(
+            self.output = MudText(
                 f"#-1 FUNCTION ({self.name.upper()}) EXPECTS BETWEEN {self.min_args} AND {self.max_args} ARGUMENTS BUT GOT {num}")
         else:
-            self.output = AnsiString(
+            self.output = MudText(
                 f"#-1 FUNCTION ({self.name.upper()}) EXPECTS AT MOST {self.max_args} ARGUMENTS BUT GOT {num}")
         self.error = True
 
     def _err_too_few_args(self, num):
         if self.max_args is not None and self.min_args != self.max_args:
-            self.output = AnsiString(
+            self.output = MudText(
                 f"#-1 FUNCTION ({self.name.upper()}) EXPECTS BETWEEN {self.min_args} AND {self.max_args} ARGUMENTS BUT GOT {num}")
         else:
-            self.output = AnsiString(
+            self.output = MudText(
                 f"#-1 FUNCTION ({self.name.upper()}) EXPECTS AT LEAST {self.min_args} ARGUMENTS BUT GOT {num}")
         self.error = True
 
     def _err_uneven_args(self, num):
-        self.output = AnsiString(
+        self.output = MudText(
             f"#-1 FUNCTION ({self.name.upper()}) EXPECTS EVEN NUMBER OF ARGUMENTS BUT GOT {num}")
         self.error = True
 
     def _err_even_args(self, num):
-        self.output = AnsiString(
+        self.output = MudText(
             f"#-1 FUNCTION ({self.name.upper()}) EXPECTS ODD NUMBER OF ARGUMENTS BUT GOT {num}")
         self.error = True
 
-    def gather_arg(self, noeval=False):
-        data, self.remaining, stopped = self.entry.evaluate(self.remaining, stop_at=[')', ','], noeval=noeval)
-        return data, stopped
+    def split_args(self):
+        escaped = False
 
-    def gather_all_args(self, noeval=False):
-        stopped = ','
-        while stopped == ',':
-            data, stopped = self.gather_arg(noeval)
-            self.args_eval.append(data)
+        remaining = self.args_data
+        plain = remaining.plain
+        i = -1
+
+        while len(remaining):
+            i += 1
+            if i > len(remaining):
+                break
+            c = plain[i]
+
+            if escaped:
+                escaped = False
+                continue
+            else:
+                if c == '\\':
+                    escaped = True
+                elif c == ',':
+                    self.args.append(remaining[:i])
+                    remaining = remaining[i+1:]
+                    plain = remaining.plain
+
+        if remaining:
+            self.args.append(remaining)
+
 
     def execute(self):
-        self.gather_all_args()
-        self.args_count = len(self.args_eval)
+        self.split_args()
+        self.args_count = len(self.args)
         c = self.args_count
         if self.max_args is not None and c > self.max_args:
             self._err_too_many_args(c)
@@ -74,15 +91,12 @@ class BaseFunction:
         if self.odd_args and c % 2 == 0:
             self._err_even_args(c)
             return
-        self.do_execute()
+        return self.do_execute()
 
     def do_execute(self):
-        self.output = f"#-1 FUNCTION {self.name.upper()} IS NOT IMPLEMENTED"
-        self.error = True
+        return MudText(f"#-1 FUNCTION {self.name.upper()} IS NOT IMPLEMENTED")
 
 
 class NotFound(BaseFunction):
     def execute(self):
-        self.gather_all_args(noeval=True)
-        self.output = f"#-1 FUNCTION ({self.called_as.upper()}) NOT FOUND"
-        self.error = True
+        return MudText(f"#-1 FUNCTION ({self.called_as.upper()}) NOT FOUND")
