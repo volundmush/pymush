@@ -11,6 +11,7 @@ class Config(BaseConfig):
         self.command_matchers = defaultdict(dict)
         self.styles = defaultdict(dict)
         self.option_class_modules = list()
+        self.mushcode_functions = set()
 
     def setup(self):
         super().setup()
@@ -18,6 +19,7 @@ class Config(BaseConfig):
         self._config_styles()
         self._config_option_classes()
         self._config_game_options()
+        self._config_mushcode_functions()
 
     def _config_classes(self):
         super()._config_classes()
@@ -93,3 +95,7 @@ class Config(BaseConfig):
 
     def _config_game_options(self):
         self.dub_system = False
+
+    def _config_mushcode_functions(self):
+        from pymush.engine.functions.string import STRING_FUNCTIONS
+        self.mushcode_functions.update(STRING_FUNCTIONS)

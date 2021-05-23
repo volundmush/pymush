@@ -39,11 +39,21 @@ class LookCommand(MushCommand):
             raise CommandException("You are nowhere. There's not much to see.")
 
 
+class ThinkCommand(MushCommand):
+    name = "think"
+    aliases = ['th', 'thi', 'thin']
+    help_category = 'Misc'
+
+    def execute(self):
+        self.entry.enactor.msg(self.parser.evaluate(self.args))
+
+
 class MobileCommandMatcher(PythonCommandMatcher):
     priority = 10
 
     def at_cmdmatcher_creation(self):
         self.add(LookCommand)
+        self.add(ThinkCommand)
 
 
 class ExitCommand(Command):

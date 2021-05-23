@@ -1,36 +1,32 @@
 from . base import BaseFunction
-from rich.text import Text
+from mudstring.patches.text import MudText
+from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style, ansify
 
 
 class AnsiFunction(BaseFunction):
     name = "ansi"
-    min_args = 2
-    max_args = 2
+    exact_args = 2
 
     def do_execute(self):
-        codes = self.args_eval[0].clean
-        text = self.args_eval[1]
-        self.output = AnsiString.from_args(codes, text)
-        if self.output.clean.startswith("#-1 INVALID ANSI DEFINITION"):
-            self.error = True
-            return False
-        else:
-            self.error = False
-            return True
+        codes = self.parser.evaluate(self.args[0])
+        text = self.parser.evaluate(self.args[1])
+
+        try:
+            style = ansi_fun_style(codes.plain)
+        except ValueError as err:
+            return MudText(f"#-1 INVALID ANSI DEFINITION: {err}")
+        return ansify(style, text)
 
 
 class ScrambleFunction(BaseFunction):
     name = "scramble"
-    min_args = 0
-    max_args = 1
+    exact_args = 1
 
     def do_execute(self):
-        if self.args_count:
-            self.output = self.args_eval[0].scramble()
-            return True
+        if self.args:
+            return self.parser.evaluate(self.args[0]).scramble()
         else:
-            self.output = AnsiString()
-            return True
+            return MudText("")
 
 
 STRING_FUNCTIONS = [AnsiFunction, ScrambleFunction]

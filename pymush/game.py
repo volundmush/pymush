@@ -50,6 +50,10 @@ class GameService(Service):
             if results:
                 self.option_classes.update(results)
 
+        for func_class in self.app.config.mushcode_functions:
+            self.functions[func_class.name] = func_class
+
+
     async def async_setup(self):
         pass
 

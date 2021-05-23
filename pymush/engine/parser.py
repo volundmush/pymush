@@ -115,7 +115,7 @@ class Parser:
         output = MudText("")
 
         func_called = False
-        print(spans)
+
         for span in spans:
             if span[0] == MushLex.SPAN:
                 output += span[1]
@@ -178,7 +178,7 @@ class Parser:
                         if paren_depth:
                             paren_depth -= 1
                             if paren_depth == 0:
-                                func_args = text[func_start+1:func_start+i]
+                                func_args = text[func_start:func_start+i]
                                 return func_bangs, func_name, func_args, func_start+i+1
 
     def valid_sub(self, text: MudText):
