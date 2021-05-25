@@ -99,3 +99,9 @@ class Config(BaseConfig):
     def _config_mushcode_functions(self):
         from pymush.engine.functions.string import STRING_FUNCTIONS
         self.mushcode_functions.update(STRING_FUNCTIONS)
+
+        from pymush.engine.functions.utility import VAR_FUNCTIONS
+        self.mushcode_functions.update(VAR_FUNCTIONS)
+
+        from pymush.engine.functions.boolean import BOOLEAN_FUNCTIONS
+        self.mushcode_functions.update(BOOLEAN_FUNCTIONS)

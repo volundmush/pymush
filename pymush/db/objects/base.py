@@ -9,6 +9,8 @@ from collections import defaultdict
 from mudstring.patches.text import MudText
 from mudstring.encodings.pennmush import ansi_fun, send_menu
 import re
+import weakref
+
 
 class NameSpace:
 
@@ -88,10 +90,11 @@ class GameObject:
     re_search = re.compile(r"(?i)^(?P<pre>(?P<quant>all|\d+)\.)?(?P<target>[A-Z0-9_.-]+)")
     cmd_matchers = []
 
+
     __slots__ = ["service", "dbid", "dbref", "name", "parent", "parent_of", "home", "home_of", "db_quota", "cpu_quota",
                  "zone", "zone_of", "owner", "owner_of", "namespaces", "namespace", "session", "connections",
                  "admin_level", "attributes", "sys_attributes", "location", "contents", "aliases", "created",
-                 "modified", "style_holder", "account_sessions"]
+                 "modified", "style_holder", "account_sessions", "saved_locations"]
 
     def __init__(self, service: "GameService", dbref: int, name: str):
         self.service = service
@@ -123,9 +126,21 @@ class GameObject:
         self.cpu_quota: float = 0.0
         self.admin_level: int = 0
         self.style_holder: Optional[StyleHandler] = None
+        self.saved_locations: dict = dict()
 
     def __hash__(self):
         return hash(self.dbid)
+
+    def get_saved_location(self, name: str):
+        if name in self.saved_locations:
+            loc = self.saved_locations[name]
+            if loc[0]:
+                return loc
+            else:
+                del self.saved_locations[name]
+
+    def set_saved_location(self, name: str, location):
+        self.saved_locations[name] = (weakref.proxy(location[0]), location[1], location[2])
 
     @property
     def style(self):

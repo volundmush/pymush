@@ -110,6 +110,9 @@ class Importer:
                     destination.home_of.add(new)
                 if (location := self.obj_map.get(old.exits, None)):
                     location.contents.add('exits', new, None)
+            elif old.type == 8: # a player
+                if (location := self.obj_map.get(old.location, None)):
+                    new.set_saved_location('_logout', (location, '', None))
             else:
                 if (location := self.obj_map.get(old.location, None)):
                     location.contents.add('', new, None)

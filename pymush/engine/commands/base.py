@@ -92,6 +92,48 @@ class MushCommand(Command):
         result, self.remaining, stopped = self.parser.evaluate(self.remaining, stop_at=stop_at, noeval=noeval)
         return result
 
+    def eqsplit_args(self):
+        escaped = False
+
+        remaining = self.args
+        plain = remaining.plain
+        paren_depth = 0
+        curly_depth = 0
+        square_depth = 0
+        i = -1
+
+        while True:
+            i += 1
+            if i > len(remaining) - 1:
+                break
+            c = plain[i]
+
+            if escaped:
+                escaped = False
+                continue
+            else:
+                if c == '\\':
+                    escaped = True
+                elif c == '(':
+                    paren_depth += 1
+                elif c == ')' and paren_depth:
+                    paren_depth -= 1
+                elif c == '[':
+                    square_depth += 1
+                elif c == ']' and square_depth:
+                    square_depth -= 1
+                elif c == '{':
+                    curly_depth += 1
+                elif c == '}' and curly_depth:
+                    curly_depth -= 1
+                elif c == '=':
+                    if not (paren_depth or square_depth or curly_depth):
+                        self.lsargs = remaining[:i]
+                        self.rsargs = remaining[i+1:]
+                        break
+
+
+
     @classmethod
     def match(cls, entry, text):
         """
@@ -119,6 +161,8 @@ class MushCommand(Command):
         self.cmd = self.mdict["cmd"]
         self.args = self.mdict["args"]
         self.remaining = self.args
+        self.lsargs = None
+        self.rsargs = None
 
 
 class BaseCommandMatcher:

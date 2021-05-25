@@ -1,5 +1,5 @@
 from .functions.base import NotFound as NotFoundFunction
-from mudstring.patches.text import MudText
+from mudstring.patches.text import MudText, OLD_TEXT
 import re
 from typing import Union, Optional, List, Set, Tuple, Dict
 from enum import IntEnum
@@ -9,6 +9,42 @@ class MushLex(IntEnum):
     SPAN = 0
     RECURSE = 1
     SUB = 2
+
+
+class MushSub(IntEnum):
+    SPACE = 0
+    NEWLINE = 1
+    TAB = 2
+
+    ENACTOR_DBREF = 3
+    ENACTOR_NAME = 4
+    ENACTOR_ACCENTED_NAME = 5
+    ENACTOR_OBJID = 6
+    ENACTOR_MONIKER = 7
+
+    PERCENT = 9
+
+    SUBJECTIVE_PRONOUN = 10
+    OBJECTIVE_PRONOUN = 11
+    POSSESSIVE_PRONOUN = 12
+    ABSOLUTE_PRONOUN = 13
+
+    NUMBER_ARG_VALUE = 14
+    REGISTER_VALUE = 15
+
+    EXECUTOR_DBREF = 16
+    ENACTOR_LOCATION_DBREF = 17
+    COMMAND_TEXT_NOEVAL = 18
+    COMMAND_TEXT_EVALED = 19
+    FUNC_INVOKE_AND_DEPTH = 20
+    CUR_DBREF_ATTR = 21
+    ARG_COUNT = 22
+    ITEXT = 23
+    STEXT = 24
+    DTEXT = 25
+    INUM = 26
+    DNUM = 27
+    CALLER_DBREF = 28
 
 
 class StackFrame:
@@ -71,8 +107,14 @@ class StackFrame:
 class Parser:
     re_func = re.compile(r"^(?P<bangs>!|!!|!\$|!!\$|!\^|!!\^)?(?P<func>\w+)(?P<open>\()")
     re_number_args = re.compile(r"^%(?P<number>\d+)")
-    re_q_old = re.compile(r"(?i)^%q(?P<q>[A-Z0-9])")
-    re_q_named = re.compile(r"(?i)^%q<(?P<q>\w+)>")
+    re_q_reg = re.compile(r"^%q(?P<varname>\d+|[A-Z])", flags=re.IGNORECASE)
+    re_q_named = re.compile(r"^%q<(?P<varname>[\w| ]+)>", flags=re.IGNORECASE)
+    re_stext = re.compile(r"^%\$(?P<num>\d+)", flags=re.IGNORECASE)
+    re_dtext = re.compile(r"^%d(?P<num>\d+)", flags=re.IGNORECASE)
+    re_itext = re.compile(r"^%i(?P<num>\d+)", flags=re.IGNORECASE)
+    re_dnum = re.compile(r"^%d_(?P<num>\d+)", flags=re.IGNORECASE)
+    re_inum = re.compile(r"^%i_(?P<num>\d+)", flags=re.IGNORECASE)
+    re_numeric = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
     def __init__(self, entry, enactor, executor, caller):
         self.entry = entry
@@ -82,6 +124,45 @@ class Parser:
         self.frame.caller = caller
         self.stack = [self.frame]
         self.func_count = 0
+
+    def truthy(self, test_str: Union[str, OLD_TEXT]) -> bool:
+        if isinstance(test_str, OLD_TEXT):
+            test_str = test_str.plain
+        test_str = test_str.strip()
+        if not test_str:
+            return False
+        if test_str.startswith("#-"):
+            return False
+        number = self.to_number(test_str)
+        if number is not None:
+            return bool(number)
+        return True
+
+    def to_number(self, test_str: Union[str, OLD_TEXT]) -> Optional[Union[int, float]]:
+        if isinstance(test_str, OLD_TEXT):
+            test_str = test_str.plain
+        test_str = test_str.strip()
+
+        if not len(test_str):
+            return 0
+
+        try:
+            value = None
+            match = self.re_numeric.fullmatch(test_str)
+            if match:
+                mdict = match.groupdict()
+                sign = -1 if mdict['neg'] else 1
+                if mdict['dec'] is not None:
+                    value = float(mdict['value']) * sign
+                else:
+                    value = int(mdict['value']) * sign
+            if value is not None:
+                return value
+            else:
+                return None
+        except Exception as e:
+            # TODO: Add proper exception value handling
+            return None
 
     def evaluate(self, text: Union[None, str, MudText], localize: bool = False, spoof: Optional["GameObject"] = None,
                   called_recursively: bool = False, executor: Optional["GameObject"] = None,
@@ -183,10 +264,78 @@ class Parser:
 
     def valid_sub(self, text: MudText):
         plain = text.plain
-        if plain[0:2] in ('%R', '%r', '%T', '%t'):
-            return 2
+        simple = plain[0:2]
+        sub = None
+        if simple in ('%R', '%r'):
+            sub = (MushSub.NEWLINE,)
+        elif simple in ('%T', '%t'):
+            sub = (MushSub.TAB,)
+        elif simple in ('%B', '%b'):
+            sub = (MushSub.SPACE,)
+        elif simple == '%#':
+            sub = (MushSub.ENACTOR_DBREF,)
+        elif simple == '%%':
+            sub = (MushSub.PERCENT,)
+        elif simple == '%:':
+            sub = (MushSub.ENACTOR_OBJID,)
+        elif simple == '%@':
+            sub = (MushSub.CALLER_DBREF,)
+        elif simple == '%?':
+            sub = (MushSub.FUNC_INVOKE_AND_DEPTH,)
+        elif simple == '%+':
+            sub = (MushSub.ARG_COUNT,)
+        elif simple == '%!':
+            sub = (MushSub.EXECUTOR_DBREF,)
+        elif simple in ('%l', '%L'):
+            sub = (MushSub.ENACTOR_LOCATION_DBREF, simple[1].isupper())
+        elif simple in ('%n', '%N'):
+            sub = (MushSub.ENACTOR_NAME, simple[1].isupper())
+        elif simple in ('%s', '%S'):
+            sub = (MushSub.SUBJECTIVE_PRONOUN, simple[1].isupper())
+        elif simple in ('%p', '%P'):
+            sub = (MushSub.POSSESSIVE_PRONOUN, simple[1].isupper())
+        elif simple in ('%o', '%O'):
+            sub = (MushSub.OBJECTIVE_PRONOUN, simple[1].isupper())
+        elif simple in ('%a', '%A'):
+            sub = (MushSub.ABSOLUTE_PRONOUN, simple[1].isupper())
 
-        return 0
+        if sub:
+            return 2, sub
+
+        if (match := self.re_number_args.fullmatch(plain)):
+            gdict = match.groupdict()
+            number = gdict['number']
+            length = len(number)
+            number = int(number)
+            return 1+length, (MushSub.NUMBER_ARG_VALUE, number)
+
+        if plain.lower().startswith('%q'):
+            # this is a q-register of some kind.
+            gdict = None
+            extra = 2
+            if (match := self.re_q_reg.fullmatch(plain)):
+                gdict = match.groupdict()
+            elif (match := self.re_q_named.fullmatch(plain)):
+                gdict = match.groupdict()
+                extra += 2
+            if gdict:
+                varname = gdict['varname']
+                varlength = len(varname)
+                if varname.isdigit():
+                    varname = int(varname)
+                return extra + varlength, (MushSub.REGISTER_VALUE, varname)
+
+        for code, reg, length in ((MushSub.ITEXT, self.re_itext, 2), (MushSub.DTEXT, self.re_dtext, 2),
+                                  (MushSub.STEXT, self.re_stext, 2), (MushSub.INUM, self.re_inum, 3),
+                                  (MushSub.DNUM, self.re_dnum, 3)):
+            if (match := reg.fullmatch(plain)):
+                mdict = match.groupdict()
+                number = mdict['num']
+                extra = len(number)
+                number = int(number)
+                return length + extra, (code, number)
+
+        return None
 
     def find_function(self, funcname: str):
         return self.entry.queue.service.functions.get(funcname.lower(), None)
@@ -217,11 +366,12 @@ class Parser:
                 elif c == '%':
                     results = self.valid_sub(text[i:])
                     if results:
+                        length, data = results
                         if i > segment_start:
                             spans.append((MushLex.SPAN, text[segment_start:i-1]))
 
-                        spans.append((MushLex.SUB, text[i:i+results]))
-                        i += results
+                        spans.append((MushLex.SUB, text[i:i+length], data))
+                        i += length
                         last_span_end = i
                         segment_start = i
                         i -= 1
@@ -250,7 +400,6 @@ class Parser:
                                 spans.append((MushLex.RECURSE, text[recurse_at + 1:i]))
                                 segment_start = i + 1
                                 last_span_end = i + 1
-
 
         # there may be leftover text that wasn't added to a span. add it to a span manually.
         if last_span_end is None:
