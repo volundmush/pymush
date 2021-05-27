@@ -14,10 +14,7 @@ class SetRFunction(BaseFunction):
         if reg_name.isdigit():
             reg_name = int(reg_name)
 
-        if value.plain:
-            self.parser.frame.vars[reg_name] = value
-        else:
-            self.parser.frame.vars.pop(reg_name, None)
+        self.parser.frame.set_var(reg_name, value)
         return value
 
 

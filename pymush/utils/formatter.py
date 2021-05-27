@@ -126,8 +126,8 @@ class Line(BaseFormatter):
         
     def text(self, formatter, conn: "Connection", user: Optional["User"] = None,
              character: Optional["GameObject"] = None):
-        conn.data = self.data
-        conn.print(self.data)
+        if self.data:
+            conn.print(self.data)
 
 
 class OOB(BaseFormatter):

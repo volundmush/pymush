@@ -2,6 +2,7 @@ from athanor_server.config import Config as BaseConfig
 from collections import defaultdict
 import re
 
+
 class Config(BaseConfig):
 
     def __init__(self):

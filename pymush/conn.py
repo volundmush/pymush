@@ -11,6 +11,7 @@ from .utils import formatter as fmt
 from .utils.selectscreen import render_select_screen
 from .utils.styling import StyleHandler
 import weakref
+from mudstring.patches.text import OLD_TEXT
 
 COLOR_MAP = {
     ColorSystem.STANDARD: "standard",

@@ -60,6 +60,7 @@ class StackFrame:
         self.localized = False
         self.number_args = parent.number_args if parent else dict()
         self.vars = parent.vars if parent else dict()
+        self.ukeys = parent.ukeys if parent else dict()
 
     def make_child(self):
         frame = StackFrame(self.parser, parent=self)
@@ -75,37 +76,74 @@ class StackFrame:
         self.localized = True
         # We are localizing this frame, so break the connection to its parent.
         self.vars = dict(self.vars)
+        self.ukeys = dict(self.ukeys)
 
-    def eval_sub(self, text: MudText):
-        """
-        Eventually this will process % and other substitutions.
-        """
-        if text.startswith('%#'):
-            return str(self.enactor), text[2:]
-        elif text.startswith('%n'):
-            return self.enactor.name, text[2:]
-        elif text.startswith('%a'):
-            return 'ansi', text[2:]
-        elif text.startswith('%R') or text.startswith('%r'):
+
+    def get_var(self, key):
+        if isinstance(key, int) and key in self.vars:
+            return self.vars[key]
+        elif isinstance(key, str):
+            key = self.ukeys.get(key.upper(), None)
+            if key in self.vars:
+                return self.vars[key]
+
+    def set_var(self, key, value):
+        if isinstance(key, int):
+            self.vars[key] = value
+        elif isinstance(key, str):
+            self.ukeys[key.upper()] = key
+            self.vars[key] = value
+
+    def eval_sub(self, subtype: MushSub, data) -> MudText:
+        if subtype == MushSub.ENACTOR_DBREF:
+            if self.enactor:
+                return MudText(self.enactor.dbref)
+        elif subtype == MushSub.ENACTOR_NAME:
+            if self.enactor:
+                if data:
+                    return MudText(self.enactor.name.capitalize())
+                else:
+                    return MudText(self.enactor.name)
+        elif subtype == MushSub.ENACTOR_OBJID:
+            if self.enactor:
+                return MudText(self.enactor.objid)
+
+        elif subtype == MushSub.CALLER_DBREF:
+            if self.caller:
+                return MudText(self.caller.dbref)
+
+        elif subtype == MushSub.SPACE:
+            return MudText(' ')
+        elif subtype == MushSub.PERCENT:
+            return MudText("%")
+        elif subtype == MushSub.NEWLINE:
             return MudText('\n')
-        elif text.startswith('%T') or text.startswith('%t'):
+        elif subtype == MushSub.TAB:
             return MudText('\t')
-        elif text.startswith('%l') or text.startswith('%L'):
-            if (loc := self.enactor.relations.get('location')):
-                return loc.objid, text[2:]
-            else:
-                return '', text[2:]
-        elif (m := self.parser.re_number_args.fullmatch(text)):
-            mdict = m.groupdict()
-            num = int(mdict['number'])
-            if self.number_args:
-                return self.number_args.get(num, ''), text[len(mdict['number'])+1:]
-        else:
-            return '%', text[1:]
+
+        elif subtype == MushSub.ENACTOR_LOCATION_DBREF:
+            if self.enactor:
+                loc = self.enactor.location[0] if self.enactor.location else None
+                if loc:
+                    return MudText(loc.dbref)
+
+        elif subtype == MushSub.NUMBER_ARG_VALUE:
+            if data in self.number_args:
+                return self.number_args[data]
+
+        elif subtype == MushSub.ARG_COUNT:
+            return MudText(str(len(self.number_args)))
+
+        elif subtype == MushSub.REGISTER_VALUE:
+            resp = self.get_var(data)
+            if resp:
+                return resp
+
+        return MudText('')
 
 
 class Parser:
-    re_func = re.compile(r"^(?P<bangs>!|!!|!\$|!!\$|!\^|!!\^)?(?P<func>\w+)(?P<open>\()")
+    re_func = re.compile(r"^(?P<bangs>!|!!|!\$|!!\$|!\^|!!\^)?(?P<func>\w+)")
     re_number_args = re.compile(r"^%(?P<number>\d+)")
     re_q_reg = re.compile(r"^%q(?P<varname>\d+|[A-Z])", flags=re.IGNORECASE)
     re_q_named = re.compile(r"^%q<(?P<varname>[\w| ]+)>", flags=re.IGNORECASE)
@@ -164,19 +202,51 @@ class Parser:
             # TODO: Add proper exception value handling
             return None
 
-    def evaluate(self, text: Union[None, str, MudText], localize: bool = False, spoof: Optional["GameObject"] = None,
+    def find_matching(self, text: str, start: int, opening: str, closing: str):
+        escaped = False
+        depth = 0
+        i = start
+        while i < len(text):
+            if escaped:
+                pass
+            else:
+                c = text[i]
+                if c == '\\':
+                    escaped = True
+                elif c == opening:
+                    depth += 1
+                elif c == closing and depth:
+                    depth -= 1
+                    if not depth:
+                        return i
+            i += 1
+        return None
+
+    def find_notspace(self, text: str, start: int):
+        escaped = False
+        i = start
+        while i < len(text):
+            if escaped:
+                pass
+            else:
+                c = text[i]
+                if c == '\\':
+                    escaped = True
+                elif c == ' ':
+                    pass
+                else:
+                    return i
+            i += 1
+        return None
+
+    def evaluate(self, text: Union[None, str, OLD_TEXT], localize: bool = False, spoof: Optional["GameObject"] = None,
                   called_recursively: bool = False, executor: Optional["GameObject"] = None,
                   caller: Optional["GameObject"] = None, number_args=None):
 
-        if text is None:
-            text = MudText("")
+        if not text:
+            return MudText("")
         if isinstance(text, str):
             text = MudText(text)
-
-        spans = self.lex(text)
-
-        if not spans:
-            return MudText("")
 
         frame = self.frame.make_child()
         self.frame = frame
@@ -195,97 +265,122 @@ class Parser:
 
         output = MudText("")
 
-        func_called = False
+        plain = text.plain
+        escaped = False
 
-        for span in spans:
-            if span[0] == MushLex.SPAN:
-                output += span[1]
-            elif span[0] == MushLex.SUB:
-                output += frame.eval_sub(span[1])
-            elif span[0] == MushLex.RECURSE:
-                output += self.evaluate(span[1], called_recursively=True)
 
-            if not func_called:
-                results = self.function_scan(output)
-                if results:
-                    func_bangs, func_name, func_args, func_end = results
-                    func_called, func_output = self.function_call(func_bangs, func_name, func_args,
-                                                                  called_recursively=called_recursively)
-                    if func_called:
-                        output = func_output + output[func_end:]
+        first_paren = False
+        no_hoover = False
+        i = self.find_notspace(plain, 0)
+        segment_start = i
+        if i is not None:
+            while i < len(plain):
+                if escaped:
+                    i += 1
+                else:
+                    c = plain[i]
+                    if c == '\\':
+                        escaped = True
+                        i += 1
+                    elif c == ' ':
+                        notspace = self.find_notspace(plain, i)
+                        if notspace is not None:
+                            if i > segment_start:
+                                output += text[segment_start:i]
+                            if output.plain:
+                                output += ' '
+                            i = notspace
+                            segment_start = i
+                        else:
+                            if i > segment_start:
+                                output += text[segment_start:i]
+                            no_hoover = True
+                            break
+                    elif c == '[':
+                        # This is potentially a recursion. Seek a matching ]
+                        closing = self.find_matching(plain, i, '[', ']')
+                        if closing is not None:
+                            if i > segment_start:
+                                output += text[segment_start:i]
+                            output += self.evaluate(text[i+1:closing], called_recursively=True)
+                            segment_start = closing+1
+                            i = closing+1
+                        else:
+                            i += 1
+                    elif c == '(' and not first_paren:
+                        # this is potentially a function call. Seek a matching )
+                        first_paren = True
+                        closing = self.find_matching(plain, i, '(', ')')
+                        if closing is not None:
+                            if i > segment_start:
+                                output += text[segment_start:i]
+                            f_match = self.re_func.fullmatch(output.plain)
+                            if f_match:
+                                fdict = f_match.groupdict()
+                                func_name = fdict['func']
+                                bangs = fdict['bangs']
+                                if (func := self.find_function(func_name)):
+                                    # hooray we have a function!
+                                    ready_fun = func(self, func_name, text[i+1:closing])
+                                    output = ready_fun.execute()
+                                else:
+                                    if called_recursively:
+                                        notfound_fun = NotFoundFunction(self, func_name, text[i+1:closing])
+                                        output = notfound_fun.execute()
+                                segment_start = closing+1
+                                i = closing+1
+                        else:
+                            i += 1
+                    elif c == '%':
+                        # this is potentially a substitution.
+                        results = self.valid_sub(plain, i)
+                        if results:
+                            length, sub = results
+                            output += self.frame.eval_sub(sub[0], sub[1])
+                            i += length
+                            segment_start = i
+                        else:
+                            if i > segment_start:
+                                output += text[segment_start:i]
+                            i += 1
+                            segment_start = i
+                    else:
+                        i += 1
+
+            # hoover up any remaining info to be evaluated...
+            if not no_hoover:
+                if i > segment_start:
+                    output += text[segment_start:i]
 
         # if we reach down here, then we are doing well and can pop a frame off.
         self.stack.pop(-1)
         if self.stack:
             self.frame = self.stack[-1]
-
         return output
 
-    def function_call(self, func_bangs: str, func_name: str, func_args: MudText, called_recursively=False):
-        called = False
-        output = None
-        if (func := self.find_function(func_name)):
-            # hooray we have a function!
-            ready_fun = func(self, func_name, func_args)
-            output = ready_fun.execute()
-            called = True
-        else:
-            if called_recursively:
-                notfound_fun = NotFoundFunction(self, func_name, func_args)
-                output = notfound_fun.execute()
-                called = True
-        return called, output
-
-    def function_scan(self, text: MudText):
-        match = self.re_func.match(text.plain)
-        if match:
-            mdict = match.groupdict()
-            func_name = mdict.get('func')
-            func_bangs = mdict.get('bangs', None)
-            func_start = match.end()
-            paren_depth = 1
-            escaped = False
-
-            for i, c in enumerate(text.plain[func_start:]):
-                if escaped:
-                    escaped = False
-                    continue
-                else:
-                    if c == '\\':
-                        escaped = True
-                    elif c == '(':
-                        paren_depth += 1
-                    elif c == ')':
-                        if paren_depth:
-                            paren_depth -= 1
-                            if paren_depth == 0:
-                                func_args = text[func_start:func_start+i]
-                                return func_bangs, func_name, func_args, func_start+i+1
-
-    def valid_sub(self, text: MudText):
-        plain = text.plain
-        simple = plain[0:2]
+    def valid_sub(self, text: str, start: int):
+        simple = text[start:start+2]
         sub = None
         if simple in ('%R', '%r'):
-            sub = (MushSub.NEWLINE,)
+            sub = (MushSub.NEWLINE, None)
         elif simple in ('%T', '%t'):
-            sub = (MushSub.TAB,)
+            sub = (MushSub.TAB, None)
         elif simple in ('%B', '%b'):
-            sub = (MushSub.SPACE,)
+            sub = (MushSub.SPACE, None)
         elif simple == '%#':
-            sub = (MushSub.ENACTOR_DBREF,)
+            sub = (MushSub.ENACTOR_DBREF, None)
         elif simple == '%%':
-            sub = (MushSub.PERCENT,)
+            sub = (MushSub.PERCENT, None)
         elif simple == '%:':
-            sub = (MushSub.ENACTOR_OBJID,)
+            sub = (MushSub.ENACTOR_OBJID, None)
         elif simple == '%@':
-            sub = (MushSub.CALLER_DBREF,)
+            sub = (MushSub.CALLER_DBREF, None)
         elif simple == '%?':
-            sub = (MushSub.FUNC_INVOKE_AND_DEPTH,)
+            sub = (MushSub.FUNC_INVOKE_AND_DEPTH, None)
         elif simple == '%+':
-            sub = (MushSub.ARG_COUNT,)
+            sub = (MushSub.ARG_COUNT, None)
         elif simple == '%!':
-            sub = (MushSub.EXECUTOR_DBREF,)
+            sub = (MushSub.EXECUTOR_DBREF, None)
         elif simple in ('%l', '%L'):
             sub = (MushSub.ENACTOR_LOCATION_DBREF, simple[1].isupper())
         elif simple in ('%n', '%N'):
@@ -302,20 +397,22 @@ class Parser:
         if sub:
             return 2, sub
 
-        if (match := self.re_number_args.fullmatch(plain)):
+        t_start = text[start:]
+
+        if (match := self.re_number_args.fullmatch(t_start)):
             gdict = match.groupdict()
             number = gdict['number']
             length = len(number)
             number = int(number)
             return 1+length, (MushSub.NUMBER_ARG_VALUE, number)
 
-        if plain.lower().startswith('%q'):
+        if t_start.lower().startswith('%q'):
             # this is a q-register of some kind.
             gdict = None
             extra = 2
-            if (match := self.re_q_reg.fullmatch(plain)):
+            if (match := self.re_q_reg.fullmatch(t_start)):
                 gdict = match.groupdict()
-            elif (match := self.re_q_named.fullmatch(plain)):
+            elif (match := self.re_q_named.fullmatch(t_start)):
                 gdict = match.groupdict()
                 extra += 2
             if gdict:
@@ -328,7 +425,7 @@ class Parser:
         for code, reg, length in ((MushSub.ITEXT, self.re_itext, 2), (MushSub.DTEXT, self.re_dtext, 2),
                                   (MushSub.STEXT, self.re_stext, 2), (MushSub.INUM, self.re_inum, 3),
                                   (MushSub.DNUM, self.re_dnum, 3)):
-            if (match := reg.fullmatch(plain)):
+            if (match := reg.fullmatch(t_start)):
                 mdict = match.groupdict()
                 number = mdict['num']
                 extra = len(number)
@@ -339,73 +436,3 @@ class Parser:
 
     def find_function(self, funcname: str):
         return self.entry.queue.service.functions.get(funcname.lower(), None)
-
-    def lex(self, text: MudText):
-        spans = list()
-
-        square_depth = 0
-        paren_depth = 0
-        escaped = False
-        recurse_at = None
-        segment_start = 0
-        last_span_end = None
-
-        i = -1
-        plain = text.plain
-        while True:
-            i += 1
-            if i >= len(plain):
-                break
-            c = plain[i]
-
-            if escaped:
-                escaped = False
-            else:
-                if c == '\\':
-                    escaped = True
-                elif c == '%':
-                    results = self.valid_sub(text[i:])
-                    if results:
-                        length, data = results
-                        if i > segment_start:
-                            spans.append((MushLex.SPAN, text[segment_start:i-1]))
-
-                        spans.append((MushLex.SUB, text[i:i+length], data))
-                        i += length
-                        last_span_end = i
-                        segment_start = i
-                        i -= 1
-
-                elif c == '(':
-                    paren_depth += 1
-                elif c == ')':
-                    if paren_depth:
-                        paren_depth -= 1
-                elif c == '[':
-                    if not paren_depth:
-                        if square_depth == 0:
-                            # we are entering a recurse section. Append any prepending segment as a span
-                            recurse_at = i
-                            if i > segment_start:
-                                spans.append((MushLex.SPAN, text[segment_start:i]))
-                                last_span_end = i - 1
-                        square_depth += 1
-                elif c == ']':
-                    if not paren_depth:
-                        if square_depth > 0:
-                            # we are inside a recursion and found a recurse terminator...
-                            square_depth -= 1
-                            if square_depth == 0:
-                                # we have found the end of the termination.
-                                spans.append((MushLex.RECURSE, text[recurse_at + 1:i]))
-                                segment_start = i + 1
-                                last_span_end = i + 1
-
-        # there may be leftover text that wasn't added to a span. add it to a span manually.
-        if last_span_end is None:
-            # somehow, there are no spans. in that case, just append everything as one span that does not recurse.
-            spans.append((MushLex.SPAN, text))
-        elif last_span_end < (len(text) - 1):
-            # there is leftover text. append it as a no-recurse span.
-            spans.append((MushLex.SPAN, text[last_span_end:]))
-        return spans
