@@ -335,6 +335,8 @@ class Parser:
                         # this is potentially a substitution.
                         results = self.valid_sub(plain, i)
                         if results:
+                            if i > segment_start:
+                                output += text[segment_start:i]
                             length, sub = results
                             output += self.frame.eval_sub(sub[0], sub[1])
                             i += length
@@ -410,9 +412,9 @@ class Parser:
             # this is a q-register of some kind.
             gdict = None
             extra = 2
-            if (match := self.re_q_reg.fullmatch(t_start)):
+            if (match := self.re_q_reg.match(t_start)):
                 gdict = match.groupdict()
-            elif (match := self.re_q_named.fullmatch(t_start)):
+            elif (match := self.re_q_named.match(t_start)):
                 gdict = match.groupdict()
                 extra += 2
             if gdict:
@@ -425,7 +427,7 @@ class Parser:
         for code, reg, length in ((MushSub.ITEXT, self.re_itext, 2), (MushSub.DTEXT, self.re_dtext, 2),
                                   (MushSub.STEXT, self.re_stext, 2), (MushSub.INUM, self.re_inum, 3),
                                   (MushSub.DNUM, self.re_dnum, 3)):
-            if (match := reg.fullmatch(t_start)):
+            if (match := reg.match(t_start)):
                 mdict = match.groupdict()
                 number = mdict['num']
                 extra = len(number)
