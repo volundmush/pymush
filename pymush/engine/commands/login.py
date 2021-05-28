@@ -5,13 +5,12 @@ import traceback
 from athanor.utils import partial_match
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
 from mudstring.encodings.pennmush import ansi_fun, send_menu
-from . shared import PyCommand
+from . shared import PyCommand, HelpCommand
 
 
 from pymush.db.importer import Importer
 from pymush.db.flatfile import check_password
 from pymush.utils import formatter as fmt
-from . help import HelpCommand
 
 
 class _LoginCommand(Command):
@@ -53,8 +52,8 @@ class ConnectCommand(_LoginCommand):
 
     def execute(self):
         name, password = self.parse_login(self.usage)
-        candidates = self.service.type_index[self.service.obj_classes['USER']]
-        account, error = self.service.search_objects(name, candidates=candidates, exact=True)
+        candidates = self.game.type_index[self.game.obj_classes['USER']]
+        account, error = self.game.search_objects(name, candidates=candidates, exact=True)
         if error:
             raise CommandException("Sorry, that was an incorrect username or password.")
         if not account:
@@ -80,8 +79,8 @@ class CreateCommand(_LoginCommand):
 
     def execute(self):
         name, password = self.parse_login(self.usage)
-        pass_hash = self.service.crypt_con.hash(password)
-        account, error = self.service.create_object('user', name)
+        pass_hash = self.game.crypt_con.hash(password)
+        account, error = self.game.create_object('user', name)
         if error:
             raise CommandException(error)
         account.password = pass_hash
@@ -129,8 +128,8 @@ class PennConnect(_LoginCommand):
 
     def execute(self):
         name, password = self.parse_login(self.usage)
-        candidates = self.service.type_index[self.service.obj_classes['PLAYER']]
-        character, error = self.service.search_objects(name, candidates=candidates, exact=True)
+        candidates = self.game.type_index[self.game.obj_classes['PLAYER']]
+        character, error = self.game.search_objects(name, candidates=candidates, exact=True)
         if error:
             raise CommandException("Sorry, that was an incorrect username or password.")
         if not character:
@@ -197,9 +196,6 @@ class Test(Command):
 
 class LoginCommandMatcher(PythonCommandMatcher):
 
-    def access(self, enactor):
-        return enactor.relations.get('account') is None
-
     def at_cmdmatcher_creation(self):
         self.add(CreateCommand)
         self.add(ConnectCommand)
@@ -207,11 +203,4 @@ class LoginCommandMatcher(PythonCommandMatcher):
         self.add(LoginPyCommand)
         self.add(ImportCommand)
         self.add(Test)
-
-
-class ConnectionCommandMatcher(PythonCommandMatcher):
-
-    def at_cmdmatcher_creation(self):
-        self.add(PyCommand)
-        self.add(QuitCommand)
         self.add(HelpCommand)

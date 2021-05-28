@@ -48,28 +48,46 @@ class MushSub(IntEnum):
 
 
 class StackFrame:
-    def __init__(self, parser, parent=None):
-        self.parser = parser
+    def __init__(self, parent=None):
+        self.parser = None
         self.parent = parent
         self.enactor = None
         self.spoof = None
         self.executor = None
         self.caller = None
-        self.dolist_val = None
-        self.iter_val = None
+        self.dvars = list()
+        self.dnum = list()
+        self.iter = list()
+        self.ivars = list()
+        self.inum = list()
         self.localized = False
         self.number_args = parent.number_args if parent else dict()
         self.vars = parent.vars if parent else dict()
         self.ukeys = parent.ukeys if parent else dict()
 
-    def make_child(self):
-        frame = StackFrame(self.parser, parent=self)
+    @classmethod
+    def from_entry(cls, entry: "QueueEntry"):
+        frame = cls()
+        frame.enactor = entry.enactor
+        frame.executor = entry.executor
+        frame.spoof = entry.spoof
+        frame.caller = entry.caller
+        return frame
+
+    def make_child(self, inherit=True):
+        frame = StackFrame(parent=self if inherit else None)
         frame.enactor = self.enactor
         frame.spoof = self.spoof
         frame.executor = self.executor
         frame.caller = self.caller
-        frame.dolist_val = self.dolist_val
-        frame.iter_val = self.iter_val
+        frame.dvars = list(self.dvars)
+        frame.dnum = list(self.dnum)
+        frame.iter = list(self.iter)
+        frame.ivars = list(self.ivars)
+        frame.inum = list(self.inum)
+        if not inherit:
+            frame.localize()
+            frame.localized = False
         return frame
 
     def localize(self):
@@ -77,7 +95,6 @@ class StackFrame:
         # We are localizing this frame, so break the connection to its parent.
         self.vars = dict(self.vars)
         self.ukeys = dict(self.ukeys)
-
 
     def get_var(self, key):
         if isinstance(key, int) and key in self.vars:
@@ -139,6 +156,34 @@ class StackFrame:
             if resp:
                 return resp
 
+        elif subtype == MushSub.DNUM:
+            try:
+                val = str(self.dnum[data])
+            except IndexError:
+                val = MudText("#-1 ARGUMENT OUT OF RANGE")
+            return val
+
+        elif subtype == MushSub.DTEXT:
+            try:
+                val = self.dvars[data]
+            except IndexError:
+                val = MudText("#-1 ARGUMENT OUT OF RANGE")
+            return val
+
+        elif subtype == MushSub.INUM:
+            try:
+                val = str(self.inum[data])
+            except IndexError:
+                val = MudText("#-1 ARGUMENT OUT OF RANGE")
+            return val
+
+        elif subtype == MushSub.ITEXT:
+            try:
+                val = self.ivars[data]
+            except IndexError:
+                val = MudText("#-1 ARGUMENT OUT OF RANGE")
+            return val
+
         return MudText('')
 
 
@@ -154,12 +199,10 @@ class Parser:
     re_inum = re.compile(r"^%i_(?P<num>\d+)", flags=re.IGNORECASE)
     re_numeric = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
-    def __init__(self, entry, enactor, executor, caller):
+    def __init__(self, entry, frame):
         self.entry = entry
-        self.frame = StackFrame(self)
-        self.frame.enactor = enactor
-        self.frame.executor = executor
-        self.frame.caller = caller
+        self.frame = frame
+        frame.parser = self
         self.stack = [self.frame]
         self.func_count = 0
 
@@ -239,35 +282,53 @@ class Parser:
             i += 1
         return None
 
+    def enter_frame(self, localize=False, enactor=None, executor=None, caller=None, spoof=None, number_args=None,
+                    dnum=None, dvar=None, iter=None, inum=None, ivar=None):
+        frame = self.frame.make_child()
+        self.frame = frame
+        if localize:
+            frame.localize()
+        self.stack.append(frame)
+        if number_args:
+            frame.number_args = number_args
+        if executor:
+            frame.executor = executor
+        if spoof:
+            frame.spoof = spoof
+        if caller:
+            frame.caller = caller
+        if dnum is not None:
+            frame.dnum.insert(0, dnum)
+            frame.dvars.insert(0, dvar)
+        if iter is not None:
+            frame.iter.insert(0, iter)
+            frame.inum.insert(0, inum)
+            frame.ivars.insert(0, ivar)
+
+    def exit_frame(self):
+        if self.stack:
+            self.stack.pop(-1)
+            if self.stack:
+                self.frame = self.stack[-1]
+
     def evaluate(self, text: Union[None, str, OLD_TEXT], localize: bool = False, spoof: Optional["GameObject"] = None,
                   called_recursively: bool = False, executor: Optional["GameObject"] = None,
-                  caller: Optional["GameObject"] = None, number_args=None):
+                  caller: Optional["GameObject"] = None, number_args=None, no_eval=False, iter=None, inum=None,
+                 ivar=None):
 
         if not text:
             return MudText("")
         if isinstance(text, str):
             text = MudText(text)
 
-        frame = self.frame.make_child()
-        self.frame = frame
-        if localize:
-            frame.localize()
-        self.stack.append(frame)
-
-        if number_args:
-            self.frame.number_args = number_args
-        if executor:
-            self.frame.executor = executor
-        if spoof:
-            self.frame.spoof = spoof
-        if caller:
-            self.frame.caller = caller
+        if not no_eval:
+            self.enter_frame(localize, spoof=spoof, executor=executor, caller=caller, number_args=number_args,
+                             iter=iter, inum=inum, ivar=ivar)
 
         output = MudText("")
 
         plain = text.plain
         escaped = False
-
 
         first_paren = False
         no_hoover = False
@@ -296,7 +357,7 @@ class Parser:
                                 output += text[segment_start:i]
                             no_hoover = True
                             break
-                    elif c == '[':
+                    elif c == '[' and not no_eval:
                         # This is potentially a recursion. Seek a matching ]
                         closing = self.find_matching(plain, i, '[', ']')
                         if closing is not None:
@@ -307,7 +368,7 @@ class Parser:
                             i = closing+1
                         else:
                             i += 1
-                    elif c == '(' and not first_paren:
+                    elif c == '(' and not no_eval and not first_paren:
                         # this is potentially a function call. Seek a matching )
                         first_paren = True
                         closing = self.find_matching(plain, i, '(', ')')
@@ -331,7 +392,7 @@ class Parser:
                                 i = closing+1
                         else:
                             i += 1
-                    elif c == '%':
+                    elif c == '%' and not no_eval:
                         # this is potentially a substitution.
                         results = self.valid_sub(plain, i)
                         if results:
@@ -355,9 +416,8 @@ class Parser:
                     output += text[segment_start:i]
 
         # if we reach down here, then we are doing well and can pop a frame off.
-        self.stack.pop(-1)
-        if self.stack:
-            self.frame = self.stack[-1]
+        if not no_eval:
+            self.exit_frame()
         return output
 
     def valid_sub(self, text: str, start: int):

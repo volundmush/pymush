@@ -1,5 +1,7 @@
 import re
 from pymush.utils import formatter as fmt
+from mudstring.patches.text import MudText, OLD_TEXT
+from typing import Union
 
 
 class CommandException(Exception):
@@ -54,7 +56,7 @@ class Command:
         self.match_obj = match_obj
         self.entry = entry
         self.parser = None
-        self.service = None
+        self.game = None
 
     def execute(self):
         """
@@ -78,25 +80,69 @@ class Command:
 
 
 class MushCommand(Command):
+    available_switches = []
 
-    def gather_args(self, noeval=False, split_at=',', stop_at='='):
-        out = list()
-        stopped = split_at
-        true_stop = [split_at, stop_at]
-        while stopped == split_at:
-            result, self.remaining, stopped = self.parser.evaluate(self.remaining, stop_at=true_stop, noeval=noeval)
-            out.append(result)
-        return out
+    def at_pre_execute(self):
+        for sw in self.switches:
+            if sw not in self.available_switches:
+                raise CommandException(f"{self.name.upper()} doesn't know switch: /{sw}")
 
-    def gather_arg(self, noeval=False, stop_at=None):
-        result, self.remaining, stopped = self.parser.evaluate(self.remaining, stop_at=stop_at, noeval=noeval)
-        return result
+    def split_args(self, text: Union[str, OLD_TEXT]):
+        escaped = False
+        curly_depth = 0
+        i = 0
+        start_segment = i
+        plain = text.plain if isinstance(text, OLD_TEXT) else text
 
-    def eqsplit_args(self):
+        while i < len(plain):
+            if escaped:
+                escaped = False
+            else:
+                c = plain[i]
+                if c == '{':
+                    curly_depth += 1
+                elif c == '}' and curly_depth:
+                    curly_depth -= 1
+                elif c == '\\':
+                    escaped = True
+                elif c == ',':
+                    yield self.parser.evaluate(text[start_segment:i], no_eval=True)
+                    start_segment = i+1
+            i += 1
+
+        if i > start_segment:
+            yield self.parser.evaluate(text[start_segment:i], no_eval=True)
+
+    def split_by(self, text: Union[str, OLD_TEXT], delim=' '):
+        plain = text.plain if isinstance(text, OLD_TEXT) else text
+
+        i = self.parser.find_notspace(plain, 0)
+        start_segment = i
+
+        while i < len(plain):
+            c = plain[i]
+            if c == delim:
+                elem = text[start_segment:i]
+                if len(elem):
+                    elem = self.parser.evaluate(elem, no_eval=True)
+                    if len(elem):
+                        yield elem
+                start_segment = i
+            else:
+                pass
+            i += 1
+
+        if i > start_segment:
+            elem = text[start_segment:i]
+            if len(elem):
+                elem = self.parser.evaluate(elem, no_eval=True)
+                if len(elem):
+                    yield elem
+
+    def eqsplit_args(self, text: Union[str, OLD_TEXT]):
         escaped = False
 
-        remaining = self.args
-        plain = remaining.plain
+        plain = text.plain if isinstance(text, OLD_TEXT) else text
         paren_depth = 0
         curly_depth = 0
         square_depth = 0
@@ -104,7 +150,7 @@ class MushCommand(Command):
 
         while True:
             i += 1
-            if i > len(remaining) - 1:
+            if i > len(plain) - 1:
                 break
             c = plain[i]
 
@@ -128,11 +174,13 @@ class MushCommand(Command):
                     curly_depth -= 1
                 elif c == '=':
                     if not (paren_depth or square_depth or curly_depth):
-                        self.lsargs = remaining[:i]
-                        self.rsargs = remaining[i+1:]
-                        break
-
-
+                        lsargs = self.parser.evaluate(text[:i], no_eval=True)
+                        if not len(lsargs):
+                            lsargs = MudText("")
+                        rsargs = self.parser.evaluate(text[i+1:], no_eval=True)
+                        if not len(rsargs):
+                            rsargs = MudText("")
+                        return lsargs, rsargs
 
     @classmethod
     def match(cls, entry, text):
@@ -160,9 +208,9 @@ class MushCommand(Command):
         self.mdict = self.match_obj.groupdict()
         self.cmd = self.mdict["cmd"]
         self.args = self.mdict["args"]
+        switches = '' if self.mdict['switches'] is None else self.mdict['switches']
+        self.switches = {sw.strip().lower() for sw in switches.strip('/').split('/')} if switches else set()
         self.remaining = self.args
-        self.lsargs = None
-        self.rsargs = None
 
 
 class BaseCommandMatcher:

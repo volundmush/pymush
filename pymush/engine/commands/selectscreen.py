@@ -5,7 +5,7 @@ import traceback
 from athanor.utils import partial_match
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
 from mudstring.encodings.pennmush import ansi_fun
-from . shared import PyCommand
+from . shared import PyCommand, HelpCommand
 
 
 class PennBindCommand(MushCommand):
@@ -113,3 +113,4 @@ class SelectCommandMatcher(PythonCommandMatcher):
         self.add(SelectScreenCommand)
         self.add(ThinkCommand)
         self.add(PennBindCommand)
+        self.add(HelpCommand)

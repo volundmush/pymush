@@ -106,8 +106,7 @@ class Importer:
 
             if old.type == 4:  # an exit
                 if (destination := self.obj_map.get(old.location, None)):
-                    new.home = destination
-                    destination.home_of.add(new)
+                    new.destination = (destination, '', None)
                 if (location := self.obj_map.get(old.exits, None)):
                     location.contents.add('exits', new, None)
             elif old.type == 8: # a player

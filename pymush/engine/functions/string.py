@@ -29,4 +29,15 @@ class ScrambleFunction(BaseFunction):
             return MudText("")
 
 
-STRING_FUNCTIONS = [AnsiFunction, ScrambleFunction]
+class ReverseFunction(BaseFunction):
+    name = "reverse"
+    exact_args = 1
+
+    def do_execute(self):
+        if self.args:
+            return self.parser.evaluate(self.args[0]).reverse()
+        else:
+            return MudText("")
+
+
+STRING_FUNCTIONS = [AnsiFunction, ScrambleFunction, ReverseFunction]

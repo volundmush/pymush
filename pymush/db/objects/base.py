@@ -88,13 +88,13 @@ class GameObject:
     type_name = None
     unique_names = False
     re_search = re.compile(r"(?i)^(?P<pre>(?P<quant>all|\d+)\.)?(?P<target>[A-Z0-9_.-]+)")
-    cmd_matchers = []
+    cmd_matchers = ('script',)
 
 
     __slots__ = ["service", "dbid", "dbref", "name", "parent", "parent_of", "home", "home_of", "db_quota", "cpu_quota",
                  "zone", "zone_of", "owner", "owner_of", "namespaces", "namespace", "session", "connections",
                  "admin_level", "attributes", "sys_attributes", "location", "contents", "aliases", "created",
-                 "modified", "style_holder", "account_sessions", "saved_locations"]
+                 "modified", "style_holder", "account_sessions", "saved_locations", "destination"]
 
     def __init__(self, service: "GameService", dbref: int, name: str):
         self.service = service
@@ -121,6 +121,7 @@ class GameObject:
         self.attributes = AttributeHandler(self, self.service.attributes)
         self.sys_attributes = dict()
         self.location: Optional[Tuple[GameObject, str, Optional[Union[Tuple[int, ...], Tuple[float, ...]]]]] = None
+        self.destination: Optional[Tuple[GameObject, str, Optional[Union[Tuple[int, ...], Tuple[float, ...]]]]] = None
         self.contents: ContentsHandler = ContentsHandler(self)
         self.db_quota: int = 0
         self.cpu_quota: float = 0.0
@@ -163,7 +164,8 @@ class GameObject:
     def serialize(self) -> Dict:
         out: Dict = {
             "dbid": self.dbid,
-            "name": self.name
+            "name": self.name,
+            "type_name": self.type_name
         }
         if self.parent:
             out["parent"] = self.parent.dbid
@@ -183,7 +185,7 @@ class GameObject:
         if self.sys_attributes:
             out["sys_attributes"] = self.sys_attributes
 
-        if self.location:
+        if self.location and self.location[0]:
             out["location"] = (self.location[0].dbid, self.location[1], self.location[2])
 
         return out
@@ -397,12 +399,34 @@ class GameObject:
                 out.add(fmt.Line(MudText('\n').join(con)))
         viewer.send(out)
 
-
     def find_cmd(self, entry: "QueueEntry", cmd_text: str):
         for matcher_name in self.cmd_matchers:
             matchers = self.game.command_matchers.get(matcher_name, None)
-            for matcher in matchers:
-                if matcher:
-                    cmd = matcher.match(entry, cmd_text)
-                    if cmd:
-                        return cmd
+            if matchers:
+                for matcher in matchers:
+                    if matcher and matcher.access(entry):
+                        cmd = matcher.match(entry, cmd_text)
+                        if cmd:
+                            return cmd
+
+    def gather_help(self, entry: "QueueEntry", data):
+        for matcher_name in self.cmd_matchers:
+            matchers = self.game.command_matchers.get(matcher_name, None)
+            if matchers:
+                for matcher in matchers:
+                    if matcher and matcher.access(entry):
+                        matcher.populate_help(entry, data)
+
+    def move_to(self, location: Optional["GameObject"], inventory: str = '',
+                coordinates: Optional[Union[Tuple[int, ...], Tuple[float, ...]]] = None):
+
+        current_location = self.location[0] if self.location else None
+
+        if current_location:
+            current_location.contents.remove(self)
+
+        if location:
+            location.contents.add(inventory, self, coordinates)
+
+        else:
+            self.location = None

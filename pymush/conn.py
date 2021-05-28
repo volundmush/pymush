@@ -66,9 +66,9 @@ class Connection(BaseConnection):
                 return
             self.last_activity = time.time()
             if self.session:
-                entry = QueueEntry.from_session(self.session, cmd, self)
+                entry = QueueEntry.from_ic(self.session, cmd, self)
             elif self.user:
-                entry = QueueEntry.from_selectscreen(self.user, cmd, self)
+                entry = QueueEntry.from_ooc(self.user, cmd, self)
             else:
                 entry = QueueEntry.from_login(self, cmd)
             self.game.queue.push(entry)
@@ -117,27 +117,41 @@ class Connection(BaseConnection):
     def join_session(self, session: "GameSession"):
         session.connections.add(self)
         self.session = session
-        self.on_join_session(session)
         if len(session.connections) == 1:
             session.on_first_connection(self)
+        self.on_join_session(session)
 
     def on_join_session(self, session: "GameSession"):
-        pass
+        entry = QueueEntry.from_ic(self.session, 'look', self)
+        self.game.queue.push(entry)
 
     def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
         for matcher_name in matcher_categories:
             matchers = self.game.command_matchers.get(matcher_name, None)
             for matcher in matchers:
-                if matcher:
+                if matcher and matcher.access(entry):
                     cmd = matcher.match(entry, cmd_text)
                     if cmd:
                         return cmd
+
+    def _gather_help(self, entry, data, matcher_categories):
+        for matcher_name in matcher_categories:
+            matchers = self.game.command_matchers.get(matcher_name, None)
+            for matcher in matchers:
+                if matcher and matcher.access(entry):
+                    matcher.populate_help(entry, data)
 
     def find_login_cmd(self, entry: "QueueEntry", cmd_text: str):
         return self._find_cmd(entry, cmd_text, self.login_matchers)
 
     def find_selectscreen_cmd(self, entry: "QueueEntry", cmd_text: str):
         return self._find_cmd(entry, cmd_text, self.select_matchers)
+
+    def gather_login_help(self, entry: "QueueEntry", data):
+        self._gather_help(entry, data, self.login_matchers)
+
+    def gather_selectscreen_help(self, entry: "QueueEntry", data):
+        self._gather_help(entry, data, self.select_matchers)
 
 
 class GameSession:
@@ -183,19 +197,31 @@ class GameSession:
         pass
 
     def on_first_connection(self, connection: "Connection"):
-        pass
+        loc = self.puppet.get_saved_location('_logout')
+        self.puppet.move_to(loc[0], inventory=loc[1], coordinates=loc[2])
 
     def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
         for matcher_name in matcher_categories:
             matchers = self.game.command_matchers.get(matcher_name, None)
             for matcher in matchers:
-                if matcher:
+                if matcher and matcher.access(entry):
                     cmd = matcher.match(entry, cmd_text)
                     if cmd:
                         return cmd
+
+    def _gather_help(self, entry, data, matcher_categories):
+        for matcher_name in matcher_categories:
+            matchers = self.game.command_matchers.get(matcher_name, None)
+            for matcher in matchers:
+                if matcher and matcher.access(entry):
+                    matcher.populate_help(entry, data)
 
     def find_cmd(self, entry: "QueueEntry", cmd_text: str):
         cmd = self._find_cmd(entry, cmd_text, self.session_matchers)
         if cmd:
             return cmd
         return self.puppet.find_cmd(entry, cmd_text)
+
+    def gather_help(self, entry: "QueueEntry", data):
+        self._gather_help(entry, data, self.session_matchers)
+        self.puppet.gather_help(entry, data)

@@ -3,7 +3,7 @@ from ..utils.text import tabular_table
 import math
 from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style
 from typing import Optional
-from rich import box, table
+from rich import box, table, columns
 
 
 class BaseFormatter:
@@ -136,17 +136,12 @@ class OOB(BaseFormatter):
 
 class TabularTable(BaseFormatter):
 
-    def __init__(self, word_list, field_width: int = 26, output_separator: str = ' ', truncate_elements: bool = True):
-        self.word_list = word_list
-        self.field_width = field_width
-        self.output_separator = output_separator
-        self.truncate_elements = truncate_elements
+    def __init__(self, word_list, field_width: int = 26, equal: bool = False):
+        self.columns = columns.Columns(word_list, width=field_width, equal=equal)
+
 
     def text(self, formatter, conn: "Connection", user: Optional["User"] = None, character: Optional["GameObject"] = None):
-        table = tabular_table(self.word_list, field_width=self.field_width, line_length=conn.details.width,
-                             output_separator=self.output_separator, truncate_elements=self.truncate_elements)
-        conn.print(table)
-
+        conn.print(self.columns)
 
 
 class Table(BaseFormatter):
@@ -163,6 +158,7 @@ class Table(BaseFormatter):
             any (str, int or dict): EvTable options, including, optionally a `table` dict
                 detailing the contents of the table.
         """
+        super().__init__()
         self.title = title
         self.rows = list()
         self.columns = list()

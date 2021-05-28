@@ -62,20 +62,27 @@ class ExitCommand(Command):
 
     def execute(self):
         ex = self.match_obj
-        if not (des := ex.relations.get('destination', None)):
+        des = ex.destination if ex.destination and ex.destination[0] else None
+        if not des:
             raise CommandException("Sorry, that's going nowhere fast.")
 
         out_here = fmt.FormatList(ex)
-        out_here.add(fmt.Line(f"{self.entry.enactor.name} heads over to {des.name}."))
+        out_here.add(fmt.Line(f"{self.entry.enactor.name} heads over to {des[0].name}."))
 
         out_there = fmt.FormatList(ex)
-        if not (loc := self.entry.enactor.relations.get('location', None)):
+        loc = self.entry.enactor.location if self.entry.enactor.location and self.entry.enactor.location[0] else None
+
+        if not loc:
             out_there.add(fmt.Line(f"{self.entry.enactor.name} arrives from somewhere..."))
         else:
-            out_there.add(fmt.Line(f"{self.entry.enactor.name} arrives from {loc.name}"))
-        des.send(out_there)
-        self.entry.enactor.move_to(self.match_obj.relations.get('destination'), look=True)
-        loc.send(out_here)
+            out_there.add(fmt.Line(f"{self.entry.enactor.name} arrives from {loc[0].name}"))
+        if des:
+            des[0].send(out_there)
+        self.entry.enactor.move_to(des[0], inventory=des[1], coordinates=des[2])
+        if des:
+            des[0].render_appearance(self.entry.enactor, self.parser, internal=True)
+        if loc:
+            loc[0].send(out_here)
 
 
 class MobileExitMatcher(BaseCommandMatcher):

@@ -4,6 +4,8 @@ import time
 import traceback
 from athanor.utils import partial_match
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
+from mudstring.encodings.pennmush import send_menu, ansi_fun
+from pymush.utils import formatter as fmt
 
 
 class PyCommand(Command):
@@ -85,3 +87,43 @@ class PyCommand(Command):
             ret = str(ret)
 
         self.msg(text=repr(ret))
+
+
+class HelpCommand(Command):
+    """
+    This is the help command.
+    """
+    name = "help"
+    re_match = re.compile(r"^(?P<cmd>help)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
+
+    def execute(self):
+        categories = self.entry.get_help()
+
+        gdict = self.match_obj.groupdict()
+        args = gdict.get('args', None)
+
+        if not args:
+            self.display_help(categories)
+        else:
+            self.display_help_file(categories, args)
+
+    def display_help(self, data):
+        cat_sort = sorted(data.keys())
+        out = fmt.FormatList(self.entry.enactor)
+        out.add(fmt.Header("Help: Available Commands"))
+        for cat_key in cat_sort:
+            cat = data[cat_key]
+            out.add(fmt.Subheader(cat_key))
+            cmds = sorted([cmd for cmd in cat], key=lambda x: x.name)
+            out.add(fmt.TabularTable([send_menu(cmd.name, commands=[(f'help {cmd.name}', f"help {cmd.name}")]) for cmd in cmds]))
+        out.add(fmt.Footer("help <command> for further help"))
+        self.entry.enactor.send(out)
+
+    def display_help_file(self, data, name):
+        total = set()
+        for k, v in data.items():
+            total.update(v)
+
+        if not (found := partial_match(name, total, key=lambda x: x.name)):
+            raise CommandException(f"No help for: {name}")
+        found.help(self.entry)

@@ -5,7 +5,7 @@ from typing import Optional
 class Player(GameObject):
     type_name = 'PLAYER'
     unique_names = True
-    cmd_matchers = ('mobile',)
+    cmd_matchers = ('mobile', 'player', 'script')
 
     @property
     def account(self):

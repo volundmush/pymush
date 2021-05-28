@@ -1,4 +1,5 @@
-from mudstring.patches.text import MudText
+from mudstring.patches.text import MudText, OLD_TEXT
+from typing import Union, Iterable
 
 
 class BaseFunction:
@@ -17,7 +18,7 @@ class BaseFunction:
         self.args_data = args_data
         self.args = list()
         self.args_eval = list()
-        self.args_count = 0
+        self.args_count = 1
         self.error = False
 
     def _err_too_many_args(self, num):
@@ -50,41 +51,43 @@ class BaseFunction:
 
     def split_args(self):
         escaped = False
-
-        remaining = self.args_data
-        plain = remaining.plain
+        text = self.args_data
+        plain = text.plain
         paren_depth = 0
-        i = -1
+        i = 0
+        segment_start = i
 
-        while len(remaining):
-            i += 1
-            if i > len(remaining)-1:
-                break
-            c = plain[i]
-
+        while i < len(plain):
             if escaped:
                 escaped = False
                 continue
             else:
+                c = plain[i]
                 if c == '\\':
                     escaped = True
                 elif c == '(':
                     paren_depth += 1
-                elif c == ')':
-                    if paren_depth:
-                        paren_depth -= 1
-                elif c == ',':
-                    if not paren_depth:
-                        self.args.append(remaining[:i])
-                        remaining = remaining[i+1:]
-                        plain = remaining.plain
+                elif c == ')' and paren_depth:
+                    paren_depth -= 1
+                elif c == ',' and not paren_depth:
+                    print(f"FOUND A COMMA AT {i}")
+                    self.args_count += 1
+                    self.args.append(text[segment_start:i])
+                    segment_start = i+1
+            i += 1
 
-        if remaining:
-            self.args.append(remaining)
+        if i > segment_start:
+            self.args.append(text[segment_start:i])
+
+        total = len(self.args)
+        diff = self.args_count - total
+
+        if diff:
+            for _ in range(diff):
+                self.args.append(MudText(""))
 
     def execute(self):
         self.split_args()
-        self.args_count = len(self.args)
         c = self.args_count
         if self.exact_args is not None and c != self.exact_args:
             return self._err_num_args(c)
@@ -100,6 +103,42 @@ class BaseFunction:
 
     def do_execute(self):
         return MudText(f"#-1 FUNCTION {self.name.upper()} IS NOT IMPLEMENTED")
+
+    def split_by(self, text: Union[str, OLD_TEXT], delim: Union[str, OLD_TEXT] = ' '):
+        plain = text.plain if isinstance(text, OLD_TEXT) else text
+        delim = delim.plain if isinstance(delim, OLD_TEXT) else delim
+
+        i = self.parser.find_notspace(plain, 0)
+        start_segment = i
+
+        while i < len(plain):
+            c = plain[i]
+            if c == delim:
+                elem = text[start_segment:i]
+                if len(elem):
+                    elem = self.parser.evaluate(elem, no_eval=True)
+                    if len(elem):
+                        yield elem
+                start_segment = i
+            else:
+                pass
+            i += 1
+
+        if i > start_segment:
+            elem = text[start_segment:i]
+            if len(elem):
+                elem = self.parser.evaluate(elem, no_eval=True)
+                if len(elem):
+                    yield elem
+
+    def join_by(self, lines: Iterable[OLD_TEXT], delim: OLD_TEXT):
+        out = MudText("")
+        finish = len(lines)-1
+        for i, elem in enumerate(lines):
+            out.append(elem)
+            if i != finish:
+                out.append(delim)
+        return out
 
 
 class NotFound(BaseFunction):

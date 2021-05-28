@@ -1,7 +1,8 @@
 from . base import MushCommand, CommandException, PythonCommandMatcher, BaseCommandMatcher, Command
 from pymush.utils import formatter as fmt
 import re
-from .shared import PyCommand
+from .shared import PyCommand, HelpCommand
+from pymush.engine.cmdqueue import QueueEntry
 
 
 class OOCCommand(Command):
@@ -43,9 +44,23 @@ class QuellCommand(PyCommand):
             self.msg(text="You are no longer quelled! Admin permissions enabled!")
 
 
+class RunCommand(MushCommand):
+    name = '@run'
+    aliases = ['@ru']
+    help_category = 'System'
+
+    def execute(self):
+        if not self.args:
+            raise CommandException("Nothing to run!")
+        new_entry = QueueEntry.from_script(self.entry.enactor, self.args, self.entry.enactor, self.entry.enactor)
+        self.entry.queue.push(new_entry)
+
+
 class SessionCommandMatcher(PythonCommandMatcher):
 
     def at_cmdmatcher_creation(self):
         self.add(OOCCommand)
         self.add(SessionPyCommand)
         self.add(QuellCommand)
+        self.add(HelpCommand)
+        self.add(RunCommand)

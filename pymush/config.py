@@ -69,6 +69,10 @@ class Config(BaseConfig):
             'exit': 'pymush.engine.commands.mobile.MobileExitMatcher'
         }
 
+        self.command_matchers['script'] = {
+            'script': 'pymush.engine.commands.scripting.ScriptCommandMatcher'
+        }
+
     def _config_styles(self):
         self.styles['system'] = {
             "border_color": ("Headers, footers, table borders, etc.", "Color", "m"),
