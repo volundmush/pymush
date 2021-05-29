@@ -6,12 +6,14 @@ from rich.color import ColorSystem
 from athanor_server.conn import Connection as BaseConnection
 import time
 from .engine.cmdqueue import QueueEntry
-from .utils.welcome import message as WELCOME
+from .welcome import message as WELCOME
 from .utils import formatter as fmt
-from .utils.selectscreen import render_select_screen
+from .selectscreen import render_select_screen
 from .utils.styling import StyleHandler
 import weakref
 from mudstring.patches.text import OLD_TEXT
+from athanor.utils import lazy_property
+
 
 COLOR_MAP = {
     ColorSystem.STANDARD: "standard",
@@ -23,8 +25,7 @@ COLOR_MAP = {
 
 class Connection(BaseConnection):
     login_matchers = ('login',)
-    select_matchers = ('selectscreen',)
-
+    select_matchers = ('ooc',)
 
     def __init__(self, service: "ConnectionService", details: ConnectionDetails):
         super().__init__(service, details)
@@ -85,9 +86,6 @@ class Connection(BaseConnection):
     def listeners(self):
         return []
 
-    def parser(self):
-        return Parser(self.core, self.objid, self.objid, self.objid)
-
     def msg(self, text, **kwargs):
         flist = fmt.FormatList(self, **kwargs)
         flist.add(fmt.Line(text))
@@ -106,6 +104,9 @@ class Connection(BaseConnection):
         self.user = account
         account.last_login = time.time()
         account.connections.add(self)
+        self.show_select_screen()
+
+    def show_select_screen(self):
         self.receive_msg(render_select_screen(self))
 
     def logout(self):
@@ -127,7 +128,7 @@ class Connection(BaseConnection):
 
     def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
         for matcher_name in matcher_categories:
-            matchers = self.game.command_matchers.get(matcher_name, None)
+            matchers = self.game.command_matchers.get(matcher_name, list())
             for matcher in matchers:
                 if matcher and matcher.access(entry):
                     cmd = matcher.match(entry, cmd_text)
@@ -136,7 +137,7 @@ class Connection(BaseConnection):
 
     def _gather_help(self, entry, data, matcher_categories):
         for matcher_name in matcher_categories:
-            matchers = self.game.command_matchers.get(matcher_name, None)
+            matchers = self.game.command_matchers.get(matcher_name, list())
             for matcher in matchers:
                 if matcher and matcher.access(entry):
                     matcher.populate_help(entry, data)
@@ -154,8 +155,14 @@ class Connection(BaseConnection):
         self._gather_help(entry, data, self.select_matchers)
 
 
+class PromptHandler:
+
+    def __init__(self, owner: "GameSession"):
+        self.owner = owner
+
+
 class GameSession:
-    session_matchers = ('session',)
+    session_matchers = ('ic',)
 
     def __init__(self, user: "GameObject", character: "GameObject"):
         self.user: "GameObject" = weakref.proxy(user)
@@ -168,6 +175,10 @@ class GameSession:
         self.quelled = True
         self.character.session = self
         self.user.account_sessions.add(self)
+
+    @lazy_property
+    def prompt(self):
+        return self.game.app.classes['game']['prompthandler'](self)
 
     @property
     def game(self):
@@ -202,7 +213,7 @@ class GameSession:
 
     def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
         for matcher_name in matcher_categories:
-            matchers = self.game.command_matchers.get(matcher_name, None)
+            matchers = self.game.command_matchers.get(matcher_name, list())
             for matcher in matchers:
                 if matcher and matcher.access(entry):
                     cmd = matcher.match(entry, cmd_text)
@@ -211,7 +222,7 @@ class GameSession:
 
     def _gather_help(self, entry, data, matcher_categories):
         for matcher_name in matcher_categories:
-            matchers = self.game.command_matchers.get(matcher_name, None)
+            matchers = self.game.command_matchers.get(matcher_name, list())
             for matcher in matchers:
                 if matcher and matcher.access(entry):
                     matcher.populate_help(entry, data)
@@ -225,3 +236,6 @@ class GameSession:
     def gather_help(self, entry: "QueueEntry", data):
         self._gather_help(entry, data, self.session_matchers)
         self.puppet.gather_help(entry, data)
+
+    def update(self, delta: float):
+        pass

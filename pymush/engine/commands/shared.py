@@ -19,8 +19,8 @@ class PyCommand(Command):
             'parser': self.parser,
             'enactor': self.entry.enactor,
             'connection': self.entry.connection,
-            "game": self.service,
-            "app": self.service.app
+            "game": self.game,
+            "app": self.game.app
         }
 
     @classmethod

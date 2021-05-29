@@ -5,6 +5,7 @@ from typing import Optional, Iterable
 class User(GameObject):
     type_name = 'USER'
     unique_names = True
+    root_owner = True
 
     def listeners(self):
         return self.account_sessions
@@ -44,14 +45,14 @@ class User(GameObject):
 
     def change_password(self, text, nohash=False):
         if not nohash:
-            text = self.service.crypt_con.hash(text)
+            text = self.game.crypt_con.hash(text)
         self.password = text
 
     def check_password(self, text):
         hash = self.password
         if not hash:
             return False
-        return self.service.crypt_con.verify(text, hash)
+        return self.game.crypt_con.verify(text, hash)
 
     def add_character(self, character: GameObject):
         characters = self.characters
@@ -72,7 +73,7 @@ class User(GameObject):
     def characters(self):
         ids = self.sys_attributes.get('characters', set())
         count = len(ids)
-        result = set([i for f in ids if (i := self.service.objects.get(f, None))])
+        result = set([i for f in ids if (i := self.game.objects.get(f, None))])
         if len(result) != count:
             self.characters = result
         return result

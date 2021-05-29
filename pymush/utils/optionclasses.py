@@ -1,10 +1,10 @@
 import datetime
 from . validatorfuncs import _TZ_DICT
 from . import validatorfuncs
-from rich.text import Text
+from rich.text import Text as _Text
 
 
-class BaseOption:
+class _BaseOption:
     """
     Abstract Class to deal with encapsulating individual Options. An Option has
     a name/key, a description to display in relevant commands and menus, and a
@@ -185,7 +185,8 @@ class BaseOption:
 # Option classes
 
 
-class Text(BaseOption):
+class Text(_BaseOption):
+
     def deserialize(self, save_data):
         got_data = str(save_data)
         if not got_data:
@@ -193,7 +194,8 @@ class Text(BaseOption):
         return got_data
 
 
-class Email(BaseOption):
+class Email(_BaseOption):
+
     def validate(self, value, **kwargs):
         return validatorfuncs.email(value, option_key=self.key, **kwargs)
 
@@ -204,7 +206,8 @@ class Email(BaseOption):
         return got_data
 
 
-class Boolean(BaseOption):
+class Boolean(_BaseOption):
+
     def validate(self, value, **kwargs):
         return validatorfuncs.boolean(value, option_key=self.key, **kwargs)
 
@@ -222,7 +225,8 @@ class Boolean(BaseOption):
         return save_data
 
 
-class Color(BaseOption):
+class Color(_BaseOption):
+
     def validate(self, value, **kwargs):
         return validatorfuncs.color(value, option_key=self.key, **kwargs)
 
@@ -230,7 +234,7 @@ class Color(BaseOption):
         return f"{self.value} - " + AnsiString.from_args(self.value, "this")
 
 
-class Timezone(BaseOption):
+class Timezone(_BaseOption):
     def validate(self, value, **kwargs):
         return validatorfuncs.timezone(value, option_key=self.key, **kwargs)
 
@@ -247,7 +251,7 @@ class Timezone(BaseOption):
         return str(self.value_storage)
 
 
-class UnsignedInteger(BaseOption):
+class UnsignedInteger(_BaseOption):
     validator_key = "unsigned_integer"
 
     def validate(self, value, **kwargs):
@@ -259,7 +263,7 @@ class UnsignedInteger(BaseOption):
         raise ValueError(f"{self.key} expected Whole Number 0+, got '{save_data}'")
 
 
-class SignedInteger(BaseOption):
+class SignedInteger(_BaseOption):
     def validate(self, value, **kwargs):
         return validatorfuncs.signed_integer(value, option_key=self.key, **kwargs)
 
@@ -269,7 +273,7 @@ class SignedInteger(BaseOption):
         raise ValueError(f"{self.key} expected Whole Number, got '{save_data}'")
 
 
-class PositiveInteger(BaseOption):
+class PositiveInteger(_BaseOption):
     def validate(self, value, **kwargs):
         return validatorfuncs.positive_integer(value, option_key=self.key, **kwargs)
 
@@ -279,7 +283,7 @@ class PositiveInteger(BaseOption):
         raise ValueError(f"{self.key} expected Whole Number 1+, got '{save_data}'")
 
 
-class Duration(BaseOption):
+class Duration(_BaseOption):
     def validate(self, value, **kwargs):
         return validatorfuncs.duration(value, option_key=self.key, **kwargs)
 
@@ -292,7 +296,7 @@ class Duration(BaseOption):
         return self.value_storage.seconds
 
 
-class Datetime(BaseOption):
+class Datetime(_BaseOption):
     def validate(self, value, **kwargs):
         return validatorfuncs.datetime(value, option_key=self.key, **kwargs)
 

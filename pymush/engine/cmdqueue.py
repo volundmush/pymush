@@ -78,7 +78,7 @@ class QueueEntry:
         entry.connection = entry.enactor
         entry.actions = command
         frame = StackFrame.from_entry(entry)
-        entry.parser = Parser(entry, frame)
+        entry.parser = Parser(frame, entry=entry)
         return entry
 
     @classmethod
@@ -92,7 +92,7 @@ class QueueEntry:
         entry.caller = entry.connection
         entry.actions = command
         frame = StackFrame.from_entry(entry)
-        entry.parser = Parser(entry, frame)
+        entry.parser = Parser(frame, entry=entry)
         return entry
 
     @classmethod
@@ -106,7 +106,7 @@ class QueueEntry:
         entry.executor = sess.puppet
         entry.caller = sess.puppet
         frame = StackFrame.from_entry(entry)
-        entry.parser = Parser(entry, frame)
+        entry.parser = Parser(frame, entry=entry)
         entry.actions = command
         return entry
 
@@ -120,17 +120,18 @@ class QueueEntry:
         entry.spoof = spoof
         entry.actions = command
         frame = StackFrame.from_entry(entry)
-        entry.parser = Parser(entry, frame)
+        entry.parser = Parser(frame, entry=entry)
         entry.split_actions = True
         return entry
 
     def action_splitter(self, actions: Union[str, OLD_TEXT]):
-        i = 0
+
         if isinstance(actions, OLD_TEXT):
             plain = actions.plain
         else:
             plain = actions
 
+        i = self.parser.find_notspace(plain, 0)
         escaped = False
         paren_depth = 0
         square_depth = 0
@@ -187,7 +188,7 @@ class QueueEntry:
             return self.enactor.find_cmd(self, plain)
 
     def execute(self):
-        print(f"EXECUTING QUEUE ENTRY: {self.__dict__}")
+
         try:
             self.start_timer = time.time()
             self.execute_action_list(self.actions, split=self.split_actions)
@@ -223,7 +224,7 @@ class QueueEntry:
         entry.spoof = frame.spoof
         entry.actions = actions
 
-        entry.parser = Parser(entry, frame)
+        entry.parser = Parser(frame, entry=entry)
         entry.split_actions = True
         self.queue.push(entry)
 

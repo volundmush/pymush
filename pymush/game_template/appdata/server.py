@@ -1,4 +1,4 @@
-from athanor.config import Config as ServerConfig
+from pymush.config import Config as ServerConfig
 
 
 class Config(ServerConfig):

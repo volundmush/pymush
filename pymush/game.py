@@ -1,15 +1,17 @@
 from athanor.app import Service
 import asyncio
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Union
 from .engine.cmdqueue import CmdQueue
 from collections import OrderedDict, defaultdict
 from pymush.db.objects.base import GameObject
-from .db.attributes import AttributeManager, SysAttributeManager
+from .db.attributes import AttributeManager
 from passlib.context import CryptContext
 from athanor.utils import import_from_module
 import time
 from .utils.misc import callables_from_module
 from athanor.utils import partial_match
+import weakref
+from mudstring.patches.text import OLD_TEXT
 
 
 class GameService(Service):
@@ -17,19 +19,19 @@ class GameService(Service):
     def __init__(self):
         self.app.game = self
         self.queue = CmdQueue(self)
-        self.next_id: int = 0
         self.objects: OrderedDict[int, GameObject] = OrderedDict()
-        self.attributes = AttributeManager(self)
-        self.sysattributes = SysAttributeManager(self)
+        self.db_objects: weakref.WeakValueDictionary[str, GameObject] = weakref.WeakValueDictionary()
+        self.attributes = self.app.classes['game']['attributemanager'](self)
         self.sessions: OrderedDict[int, "GameSession"] = OrderedDict()
         self.in_events: Optional[asyncio.Queue] = None
         self.out_events: Optional[asyncio.Queue] = None
         self.obj_classes = self.app.classes['gameobject']
-        self.type_index = defaultdict(set)
+        self.type_index = defaultdict(weakref.WeakSet)
         self.crypt_con = CryptContext(schemes=['argon2'])
         self.command_matchers = dict()
         self.option_classes = dict()
         self.functions = dict()
+        self.update_subscribers = weakref.WeakSet()
 
     @property
     def styles(self):
@@ -37,6 +39,7 @@ class GameService(Service):
 
     def setup(self):
         super().setup()
+
         for k, v in self.app.config.command_matchers.items():
             match_list = list()
             for matcher_name, matcher_path in v.items():
@@ -45,14 +48,14 @@ class GameService(Service):
             match_list.sort(key=lambda x: getattr(x, 'priority', 0))
             self.command_matchers[k] = match_list
 
-        for path in self.app.config.option_class_modules:
-            results = callables_from_module(path)
-            if results:
-                self.option_classes.update(results)
+        for path in self.app.config.gather_modules['optionclasses']:
+            self.option_classes.update(callables_from_module(path))
 
-        for func_class in self.app.config.mushcode_functions:
-            self.functions[func_class.name] = func_class
+        for path in self.app.config.gather_modules['functions']:
+            results = {v.name: v for v in callables_from_module(path).values()}
+            self.functions.update(results)
 
+        self.app.classes['game']['lockhandler'].lock_funcs = self.lock_functions
 
     async def async_setup(self):
         pass
@@ -62,10 +65,8 @@ class GameService(Service):
 
     def serialize(self) -> dict:
         out = dict()
-        out["next_id"] = self.next_id
         out["objects"] = {k: v.serialize() for k, v in self.objects.items()}
         out["attributes"] = self.attributes.serialize()
-        out["sysattributes"] = self.attributes.serialize()
         return out
 
     def locate_dbref(self, text):
@@ -101,8 +102,12 @@ class GameService(Service):
         else:
             return None, "Invalid dbref!"
 
-    def create_object(self, type_name: str, name: str, dbid: Optional[int] = None, namespace: Optional[GameObject] = None):
+    def create_object(self, type_name: str, name: str, dbid: Optional[int] = None,
+                      location: Union[GameObject, str, OLD_TEXT, int] = None, no_location=False,
+                      namespace: Optional[GameObject] = None, owner: Optional[GameObject] = None):
+
         name = name.strip()
+        type_name = type_name.upper().strip()
         if not name:
             return None, f"Objects must have a name!"
 
@@ -115,31 +120,56 @@ class GameService(Service):
             if dbid in self.objects:
                 return None, f"DBID {dbid} is already in use!"
         else:
-            dbid = self.next_id
+            dbid = 0
             while dbid in self.objects:
-                self.next_id += 1
-                dbid = self.next_id
+                dbid += 1
 
-        # ignoring specific namespace check for now...
+        if namespace:
+            namespace = self.resolve_object(namespace)
+        if namespace:
+            found, err = self.search_objects(name, namespace.namespaces[type_name], exact=True, aliases=True)
+            if found:
+                return None, f"That name is already in use by another {type_name} managed by {namespace.objid}!"
 
-        obj_class = self.obj_classes.get(type_name.upper(), None)
+        obj_class = self.obj_classes.get(type_name, None)
         if not obj_class:
             return None, f"{type_name} does not map to an Object Class!"
 
+        if owner:
+            owner = self.resolve_object(owner)
+
+        if owner and obj_class.root_owner:
+            owner = None
+        if not obj_class.root_owner:
+            if not owner:
+                raise ValueError("All non-root_owner objects must have an Owner!")
 
         if obj_class.unique_names:
-            found, err = self.search_objects(name, self.type_index[obj_class], exact=True, aliases=True)
+            found, err = self.search_objects(name, self.type_index[type_name], exact=True, aliases=True)
             if found:
-                return None, f"That name is already in use by another {obj_class.type_name}!"
+                return None, f"That name is already in use by another {type_name}!"
 
-        obj = obj_class(self, dbid, name)
+        if no_location:
+            location = None
+        else:
+            if location:
+                orig = location
+                location = self.resolve_object(location)
+                if not location:
+                    raise ValueError(f"{orig} cannot be resolved to a GameObject for location!")
+            else:
+                location = self.get_start_location(type_name)
+
         now = int(time.time())
-        obj.created = now
-        obj.modified = now
-        self.type_index[obj_class].add(obj)
+        obj = obj_class(self, dbid, now, name)
+        self.type_index[type_name].add(obj)
+        self.db_objects[obj.dbref] = obj
+        self.db_objects[obj.objid] = obj
 
         if namespace:
-            obj.set_namespace(namespace)
+            obj.namespace = namespace
+        if location:
+            obj.location = location
 
         self.objects[dbid] = obj
         return obj, None
@@ -153,7 +183,7 @@ class GameService(Service):
                 if name_lower == obj.name.lower():
                     return obj, None
         else:
-            if (found := partial_match(name, self.users.values(), key=lambda x: x.name)):
+            if (found := partial_match(name, candidates, key=lambda x: x.name)):
                 return found, None
         return None, f"Sorry, nothing matches: {name}"
 
@@ -161,3 +191,23 @@ class GameService(Service):
         if not (sess := self.sessions.get(character.dbid, None)):
             sess = self.app.classes['game']['gamesession'](connection.user, character)
         connection.join_session(sess)
+
+    def update(self, delta: float):
+        for obj in self.update_subscribers:
+            obj.update(delta)
+
+    def get_start_location(self, type_name: str):
+        o = self.app.config.game_options
+        type_start = o['type_start'].get(type_name, o.get('default_start', 0))
+        return self.resolve_object(type_start)
+
+    def resolve_object(self, check: Union["GameObject", str, OLD_TEXT, int]) -> Optional[GameObject]:
+        if isinstance(check, GameObject):
+            return check
+        elif isinstance(check, int):
+            return self.objects.get(check, None)
+        elif isinstance(check, str):
+            return self.db_objects.get(check, None)
+        elif isinstance(check, OLD_TEXT):
+            check = check.plain
+            return self.db_objects.get(check, None)

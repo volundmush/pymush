@@ -3,6 +3,7 @@ from mudstring.patches.text import MudText, OLD_TEXT
 import re
 from typing import Union, Optional, List, Set, Tuple, Dict
 from enum import IntEnum
+import weakref
 
 
 class MushLex(IntEnum):
@@ -199,12 +200,20 @@ class Parser:
     re_inum = re.compile(r"^%i_(?P<num>\d+)", flags=re.IGNORECASE)
     re_numeric = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
-    def __init__(self, entry, frame):
-        self.entry = entry
+    def __init__(self, frame, entry=None):
         self.frame = frame
+        self.entry = entry
         frame.parser = self
         self.stack = [self.frame]
         self.func_count = 0
+
+    @classmethod
+    def from_object(cls, obj: "GameObject", enactor: "GameObject"):
+        frame = StackFrame()
+        frame.executor = weakref.proxy(obj)
+        frame.caller = frame.executor
+        frame.enactor = weakref.proxy(enactor)
+        return cls(frame)
 
     def truthy(self, test_str: Union[str, OLD_TEXT]) -> bool:
         if isinstance(test_str, OLD_TEXT):

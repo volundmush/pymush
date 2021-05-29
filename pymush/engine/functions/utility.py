@@ -100,5 +100,3 @@ class IBreakFunction(BaseFunction):
         except IndexError:
             return MudText("#-1 ARGUMENT OUT OF RANGE")
 
-
-VAR_FUNCTIONS = [SetRFunction, SetQFunction, ListQFunction, IfFunction, IterFunction, IBreakFunction]

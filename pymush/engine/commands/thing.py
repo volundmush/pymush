@@ -48,7 +48,7 @@ class ThinkCommand(MushCommand):
         self.entry.enactor.msg(self.parser.evaluate(self.args))
 
 
-class MobileCommandMatcher(PythonCommandMatcher):
+class ThingCommandMatcher(PythonCommandMatcher):
     priority = 10
 
     def at_cmdmatcher_creation(self):
@@ -85,7 +85,7 @@ class ExitCommand(Command):
             loc[0].send(out_here)
 
 
-class MobileExitMatcher(BaseCommandMatcher):
+class ThingExitMatcher(BaseCommandMatcher):
     priority = 110
 
     def match(self, entry, text):

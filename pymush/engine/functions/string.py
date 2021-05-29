@@ -39,5 +39,3 @@ class ReverseFunction(BaseFunction):
         else:
             return MudText("")
 
-
-STRING_FUNCTIONS = [AnsiFunction, ScrambleFunction, ReverseFunction]

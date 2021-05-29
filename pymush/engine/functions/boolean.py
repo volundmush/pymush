@@ -2,7 +2,7 @@ from . base import BaseFunction
 from mudstring.patches.text import MudText
 
 
-class AbstractBoolFunction(BaseFunction):
+class _AbstractBoolFunction(BaseFunction):
     
     def do_execute(self):
         return MudText("1") if self.math_execute() else MudText("0")
@@ -11,7 +11,7 @@ class AbstractBoolFunction(BaseFunction):
         return False
 
 
-class TFunction(AbstractBoolFunction):
+class TFunction(_AbstractBoolFunction):
     name = 't'
     min_args = 0
     max_args = 1
@@ -24,7 +24,7 @@ class TFunction(AbstractBoolFunction):
             return self.parser.truthy('')
 
 
-class NotFunction(AbstractBoolFunction):
+class NotFunction(_AbstractBoolFunction):
     name = 'not'
     min_args = 0
     max_args = 1
@@ -37,7 +37,7 @@ class NotFunction(AbstractBoolFunction):
             return not self.parser.truthy('')
 
 
-class AndFunction(AbstractBoolFunction):
+class AndFunction(_AbstractBoolFunction):
     name = 'and'
     min_args = 2
     
@@ -46,7 +46,7 @@ class AndFunction(AbstractBoolFunction):
         return all(truthy)
 
 
-class CAndFunction(AbstractBoolFunction):
+class CAndFunction(_AbstractBoolFunction):
     name = 'cand'
     min_args = 2
 
@@ -60,7 +60,7 @@ class CAndFunction(AbstractBoolFunction):
         return truthy
 
 
-class OrFunction(AbstractBoolFunction):
+class OrFunction(_AbstractBoolFunction):
     name = 'or'
     min_args = 2
 
@@ -69,7 +69,7 @@ class OrFunction(AbstractBoolFunction):
         return any(truthy)
 
 
-class COrFunction(AbstractBoolFunction):
+class COrFunction(_AbstractBoolFunction):
     name = 'cor'
     min_args = 2
 
@@ -80,6 +80,3 @@ class COrFunction(AbstractBoolFunction):
             if truthy:
                 return True
         return False
-
-
-BOOLEAN_FUNCTIONS = [TFunction, NotFunction, AndFunction, CAndFunction, OrFunction, COrFunction]

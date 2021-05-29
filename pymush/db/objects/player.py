@@ -5,13 +5,15 @@ from typing import Optional
 class Player(GameObject):
     type_name = 'PLAYER'
     unique_names = True
-    cmd_matchers = ('mobile', 'player', 'script')
+    cmd_matchers = ('thing', 'player', 'script')
+    can_be_puppet = True
+    ignore_sessionless = True
 
     @property
     def account(self):
         aid = self.sys_attributes.get('account', None)
         if aid is not None:
-            account = self.service.objects.get(aid, None)
+            account = self.game.objects.get(aid, None)
             if account:
                 return account
 
