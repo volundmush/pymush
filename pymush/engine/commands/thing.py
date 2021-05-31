@@ -8,10 +8,11 @@ class LookCommand(MushCommand):
     help_category = 'Interaction'
 
     def execute(self):
+        enactor = self.parser.frame.enactor
         if self.args:
             arg = self.gather_arg()
             if len(arg):
-                found, err = self.entry.enactor.locate_object(arg.plain, first_only=True, multi_match=True)
+                found, err = enactor.locate_object(arg.plain, first_only=True, multi_match=True)
                 if found:
                     self.look_at(found[0])
                 else:
@@ -22,19 +23,22 @@ class LookCommand(MushCommand):
             self.look_here()
 
     def look_at(self, target):
-        loc = self.entry.enactor.location[0] if self.entry.enactor.location else None
+        enactor = self.parser.frame.enactor
+        loc = enactor.location
         if loc:
             if loc == target:
-                target.render_appearance(self.entry.enactor, self.entry.parser, internal=True)
+                target.render_appearance(self.interpreter, enactor, internal=True)
             else:
-                target.render_appearance(self.entry.enactor, self.entry.parser)
+                target.render_appearance(self.interpreter, enactor)
         else:
-            target.render_appearance(self.entry.enactor, self.entry.parser)
+            target.render_appearance(self.interpreter, enactor)
 
     def look_here(self):
-        loc = self.entry.enactor.location[0] if self.entry.enactor.location else None
+        enactor = self.parser.frame.enactor
+        loc = enactor.location
+
         if loc:
-            loc.render_appearance(self.entry.enactor, self.entry.parser, internal=True)
+            loc.render_appearance(self.interpreter, enactor, internal=True)
         else:
             raise CommandException("You are nowhere. There's not much to see.")
 
@@ -70,7 +74,7 @@ class ExitCommand(Command):
         out_here.add(fmt.Line(f"{self.entry.enactor.name} heads over to {des[0].name}."))
 
         out_there = fmt.FormatList(ex)
-        loc = self.entry.enactor.location if self.entry.enactor.location and self.entry.enactor.location[0] else None
+        loc = self.entry.enactor.location
 
         if not loc:
             out_there.add(fmt.Line(f"{self.entry.enactor.name} arrives from somewhere..."))
@@ -89,7 +93,7 @@ class ThingExitMatcher(BaseCommandMatcher):
     priority = 110
 
     def match(self, entry, text):
-        loc = entry.enactor.location[0] if entry.enactor.location else None
+        loc = entry.enactor.location
         if not loc:
             return
 
@@ -99,7 +103,7 @@ class ThingExitMatcher(BaseCommandMatcher):
             text = text[3:]
 
         if text:
-            exits = loc.contents.all('exits')
+            exits = loc.namespaces['EXIT']
             if not exits:
                 return
             found, err = entry.enactor.locate_object(text, general=False, dbref=False, location=False, contents=False,

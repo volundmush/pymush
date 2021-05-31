@@ -1,5 +1,7 @@
 from mudstring.patches.text import MudText, OLD_TEXT
-from typing import Union, Iterable
+from typing import Union, Iterable, List
+from pymush.utils.text import to_number
+from pymush.utils import formatter as fmt
 
 
 class BaseFunction:
@@ -11,6 +13,7 @@ class BaseFunction:
     even_args = False
     odd_args = False
     eval_args = True
+    help_category = None
 
     def __init__(self, parser, called_as: str, args_data: MudText):
         self.parser = parser
@@ -20,6 +23,21 @@ class BaseFunction:
         self.args_eval = list()
         self.args_count = 1
         self.error = False
+
+    @classmethod
+    def help(cls, interpreter):
+        """
+        This is called by the command-help system if help is called on this command.
+        """
+        enactor = interpreter.frame.enactor
+        if cls.__doc__:
+            out = fmt.FormatList(enactor)
+            out.add(fmt.Header(f"Help: {cls.name}"))
+            out.add(fmt.Line(cls.__doc__))
+            out.add(fmt.Footer())
+            enactor.send(out)
+        else:
+            enactor.msg(text="Help is not implemented for this command.")
 
     def _err_too_many_args(self, num):
         if self.min_args is not None and self.min_args != self.max_args:
@@ -70,7 +88,6 @@ class BaseFunction:
                 elif c == ')' and paren_depth:
                     paren_depth -= 1
                 elif c == ',' and not paren_depth:
-                    print(f"FOUND A COMMA AT {i}")
                     self.args_count += 1
                     self.args.append(text[segment_start:i])
                     segment_start = i+1
@@ -139,6 +156,15 @@ class BaseFunction:
             if i != finish:
                 out.append(delim)
         return out
+
+    def list_to_numbers(self, numbers: Iterable[MudText]) -> List[Union[float, int]]:
+        out_vals = list()
+        for arg in numbers:
+            num = to_number(self.parser.evaluate(arg))
+            if num is None:
+                raise ValueError("#-1 ARGUMENTS MUST BE NUMBERS")
+            out_vals.append(num)
+        return out_vals
 
 
 class NotFound(BaseFunction):

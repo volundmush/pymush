@@ -1,9 +1,11 @@
 from . base import BaseFunction
 from mudstring.patches.text import MudText
+from pymush.utils.text import truthy
 
 
 class _AbstractBoolFunction(BaseFunction):
-    
+    help_category = 'boolean'
+
     def do_execute(self):
         return MudText("1") if self.math_execute() else MudText("0")
 
@@ -13,28 +15,17 @@ class _AbstractBoolFunction(BaseFunction):
 
 class TFunction(_AbstractBoolFunction):
     name = 't'
-    min_args = 0
-    max_args = 1
+    exact_args = 1
 
     def math_execute(self):
-        if self.args:
-            value = self.parser.evaluate(self.args[0])
-            return self.parser.truthy(value)
-        else:
-            return self.parser.truthy('')
+        return truthy(self.parser.evaluate(self.args[0]))
 
 
-class NotFunction(_AbstractBoolFunction):
+class NotFunction(TFunction):
     name = 'not'
-    min_args = 0
-    max_args = 1
 
     def math_execute(self):
-        if self.args:
-            value = self.parser.evaluate(self.args[0])
-            return not self.parser.truthy(value)
-        else:
-            return not self.parser.truthy('')
+        return not super().math_execute()
 
 
 class AndFunction(_AbstractBoolFunction):
@@ -42,8 +33,7 @@ class AndFunction(_AbstractBoolFunction):
     min_args = 2
     
     def math_execute(self):
-        truthy = [self.parser.truthy(self.parser.evaluate(arg)) for arg in self.args]
-        return all(truthy)
+        return all([truthy(self.parser.evaluate(arg)) for arg in self.args])
 
 
 class CAndFunction(_AbstractBoolFunction):
@@ -51,13 +41,12 @@ class CAndFunction(_AbstractBoolFunction):
     min_args = 2
 
     def math_execute(self):
-        truthy = False
+        t = False
         for arg in self.args:
-            evaled = self.parser.evaluate(arg)
-            truthy = self.parser.truthy(evaled)
-            if not truthy:
+            t = truthy(self.parser.evaluate(arg))
+            if not t:
                 return False
-        return truthy
+        return t
 
 
 class OrFunction(_AbstractBoolFunction):
@@ -65,8 +54,7 @@ class OrFunction(_AbstractBoolFunction):
     min_args = 2
 
     def math_execute(self):
-        truthy = [self.parser.truthy(self.parser.evaluate(arg)) for arg in self.args]
-        return any(truthy)
+        return any([truthy(self.parser.evaluate(arg)) for arg in self.args])
 
 
 class COrFunction(_AbstractBoolFunction):
@@ -75,8 +63,6 @@ class COrFunction(_AbstractBoolFunction):
 
     def math_execute(self):
         for arg in self.args:
-            evaled = self.parser.evaluate(arg)
-            truthy = self.parser.truthy(evaled)
-            if truthy:
+            if truthy(self.parser.evaluate(arg)):
                 return True
         return False

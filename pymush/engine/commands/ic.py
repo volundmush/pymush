@@ -34,6 +34,8 @@ class QuellCommand(PyCommand):
 
     @classmethod
     def access(cls, entry):
+        print(f"CHECKING QUELL... {entry}")
+        print(f"alevel: {entry.session.get_alevel(ignore_quell=True)}")
         return entry.session.get_alevel(ignore_quell=True) > 0
 
     def execute(self):

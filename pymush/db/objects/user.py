@@ -5,7 +5,7 @@ from typing import Optional, Iterable
 class User(GameObject):
     type_name = 'USER'
     unique_names = True
-    root_owner = True
+    is_root_owner = True
 
     def listeners(self):
         return self.account_sessions

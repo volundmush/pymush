@@ -55,8 +55,6 @@ class GameService(Service):
             results = {v.name: v for v in callables_from_module(path).values()}
             self.functions.update(results)
 
-        self.app.classes['game']['lockhandler'].lock_funcs = self.lock_functions
-
     async def async_setup(self):
         pass
 
@@ -138,9 +136,9 @@ class GameService(Service):
         if owner:
             owner = self.resolve_object(owner)
 
-        if owner and obj_class.root_owner:
+        if owner and obj_class.is_root_owner:
             owner = None
-        if not obj_class.root_owner:
+        if not obj_class.is_root_owner:
             if not owner:
                 raise ValueError("All non-root_owner objects must have an Owner!")
 
@@ -162,9 +160,7 @@ class GameService(Service):
 
         now = int(time.time())
         obj = obj_class(self, dbid, now, name)
-        self.type_index[type_name].add(obj)
-        self.db_objects[obj.dbref] = obj
-        self.db_objects[obj.objid] = obj
+        self.register_obj(obj)
 
         if namespace:
             obj.namespace = namespace
@@ -173,6 +169,12 @@ class GameService(Service):
 
         self.objects[dbid] = obj
         return obj, None
+
+    def register_obj(self, obj: GameObject):
+        self.objects[obj.dbid] = obj
+        self.type_index[obj.type_name].add(obj)
+        self.db_objects[obj.dbref] = obj
+        self.db_objects[obj.objid] = obj
 
     def search_objects(self, name, candidates: Optional[Iterable] = None, exact=False, aliases=False):
         if candidates is None:

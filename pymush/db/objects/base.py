@@ -78,7 +78,7 @@ class GameObject:
     type_name = None
     unique_names = False
     cmd_matchers = ('script',)
-    root_owner = False
+    is_root_owner = False
     can_be_zone = False
     can_be_destination = False
     can_have_destination = False
@@ -99,7 +99,7 @@ class GameObject:
         self._zone_of: weakref.WeakValueDictionary[str, GameObject] = weakref.WeakValueDictionary()
         self._owner: Optional[GameObject] = None
         self._owner_of: weakref.WeakValueDictionary[str, GameObject] = weakref.WeakValueDictionary()
-        self._owner_of_types: Dict[str, weakref.WeakValueDictionary] = defaultdict(weakref.WeakValueDictionary)
+        self._owner_of_type: Dict[str, weakref.WeakValueDictionary] = defaultdict(weakref.WeakValueDictionary)
         self.namespaces: Dict[str, weakref.WeakSet] = defaultdict(weakref.WeakSet)
         self._namespace: Optional[GameObject] = None
         self.session: Optional["GameSession"] = None
@@ -150,7 +150,7 @@ class GameObject:
 
     @owner.setter
     def owner(self, value: Optional[Union["GameObject", str, OLD_TEXT, int]]):
-        if self.root_owner:
+        if self.is_root_owner:
             raise ValueError(f"A {self.type_name} cannot be owned by anything! It is a root owner!")
         old = self._owner
         if value is not None:
@@ -172,6 +172,17 @@ class GameObject:
                 del old._owner_of[self.objid]
                 del old._owner_of_type[self.type_name][self.objid]
             self._owner = None
+
+    @property
+    def root_owner(self):
+        if self.is_root_owner:
+            return None
+        owner = self.owner
+        while owner is not None:
+            if owner.is_root_owner:
+                return owner
+            else:
+                owner = owner.owner
 
     @property
     def zone(self):
@@ -202,6 +213,49 @@ class GameObject:
             if old:
                 del old._zone_of[self.objid]
             self._zone = None
+
+    def gather_zones(self, max_zones: Optional[int] = None, max_depth: Optional[int] = None):
+        found = list()
+        locations = weakref.WeakSet()
+        location = self.location
+        locations.add(location)
+        cur_depth = 0
+        while location is not None:
+            if max_depth and cur_depth >= max_depth:
+                break
+            z = location.zone
+            if z:
+                if z not in found:
+                    found.append(z)
+                    if max_zones and len(found) >= max_zones:
+                        break
+            cur_depth += 1
+            location = location.location
+            if location in locations:
+                # woops, recursion!
+                break
+            locations.add(location)
+
+        return found
+
+
+    @property
+    def in_zone(self):
+        location = self.location
+        if location:
+            return location._recurse_to_zone()
+        return None
+
+    def _recurse_to_zone(self):
+        z = self.zone
+        if z:
+            return z
+        else:
+            location = self.location
+            if location:
+                return location._recurse_to_zone()
+            else:
+                return None
 
     @property
     def zdescendants(self):
@@ -276,7 +330,7 @@ class GameObject:
             if old and found != old:
                 del old._location_of[self.objid]
             found._location_of[self.objid] = self
-            self._owner = weakref.proxy(found)
+            self._location = weakref.proxy(found)
         else:
             if old:
                 del old._location_of[self.objid]
@@ -337,11 +391,6 @@ class GameObject:
 
     def __hash__(self):
         return hash(self.objid)
-
-    def parser(self, enactor: Optional["GameObject"] = None):
-        if enactor is None:
-            enactor = self
-        return Parser.from_object(self, enactor)
 
     @property
     def style(self):
@@ -429,26 +478,29 @@ class GameObject:
             dubs.pop((target.dbid, target.created), None)
         self.sys_attributes['dubs'] = dubs
 
-    def generate_identifers_name_for(self, viewer):
-        return self.name
+    def generate_name_for(self, target):
+        return target.name
 
-    def get_keyphrase_for(self, viewer):
-        return self.name
+    def generate_aliases_for(self, target):
+        return target.aliases
 
-    def get_dub_or_keyphrase_for(self, viewer):
-        dubbed = viewer.get_dub(self)
+    def get_keyphrase_for(self, target):
+        return target.name
+
+    def get_dub_or_keyphrase_for(self, target):
+        dubbed = self.get_dub(target)
         if dubbed:
             return dubbed
-        return self.get_keyphrase_for(viewer)
+        return self.get_keyphrase_for(target)
 
-    def generate_identifiers_for(self, viewer, names=True, aliases=True, nicks=True):
+    def generate_identifiers_for(self, target, names=True, aliases=True, nicks=True):
         whole, words = list(), list()
         if names:
-            identifiers = self.generate_identifers_name_for(viewer)
-            whole.append(identifiers)
-            words.extend(identifiers.split())
+            name = self.generate_name_for(target)
+            whole.append(name)
+            words.extend(name.split())
         if aliases:
-            for alias in self.aliases:
+            for alias in self.generate_aliases_for(target):
                 whole.append(alias)
                 words.extend(alias.split())
         if nicks:
@@ -512,18 +564,20 @@ class GameObject:
             total_candidates.remove(self)
 
         if filter_visible:
-            total_candidates = [c for c in total_candidates if self.can_see(c)]
+            total_candidates = [c for c in total_candidates if self.can_perceive(c)]
         else:
             total_candidates = list(total_candidates)
 
         keywords = defaultdict(list)
         full_names = defaultdict(list)
 
+        simple_words = ('the', 'of', 'an', 'a', 'or', 'and')
+
         for can in total_candidates:
-            whole, words = can.generate_identifiers_for(self, names=use_names, aliases=use_aliases, nicks=use_nicks)
+            whole, words = self.generate_identifiers_for(can, names=use_names, aliases=use_aliases, nicks=use_nicks)
             for word in words:
                 ilower = word.lower()
-                if ilower in ('the', 'of', 'an', 'a', 'or', 'and'):
+                if ilower in simple_words:
                     continue
                 keywords[ilower].append(can)
             for n in whole:
@@ -562,11 +616,14 @@ class GameObject:
 
         return out, None
 
-    def can_see(self, target: "GameObject"):
+    def can_perceive(self, target: "GameObject"):
+        return True
+
+    def can_interact_with(self, target: "GameObject"):
         return True
     
-    def render_appearance(self, viewer, internal=False):
-        parser = self.parser(enactor=viewer)
+    def render_appearance(self, interpreter: "Interpreter", viewer: "GameObject", internal=False):
+        parser = interpreter.make_parser(executor=self, enactor=viewer)
         out = fmt.FormatList(viewer)
 
         if (nameformat := self.attributes.get_value('NAMEFORMAT')):

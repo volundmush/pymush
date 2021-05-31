@@ -69,7 +69,7 @@ class CharSelectCommand(Command):
     def execute(self):
         mdict = self.match_obj.groupdict()
         acc = self.entry.user
-        if not (chars := acc.characters):
+        if not (chars := acc._owner_of_type['PLAYER'].values()):
             raise CommandException("No characters to join the game as!")
         if not (args := mdict.get("args", None)):
             names = ', '.join([obj.name for obj in chars])

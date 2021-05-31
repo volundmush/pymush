@@ -24,13 +24,13 @@ def render_select_screen(connection):
             t2.add_row(f"{c.client_id}", f"{str(c.details.protocol)}", f"{c.details.host_address}", "", f"{c.details.client_name}", f"{c.details.width}")
         out.add(t2)
 
-    if (chars := acc.characters):
+    if (chars := acc._owner_of_type['PLAYER']):
         out.add(fmt.Subheader("Characters"))
         t3 = fmt.Table()
         t3.add_column("Id")
         t3.add_column("Name")
-        for c in chars:
-            t3.add_row(f"{c.dbid}", send_menu(c.name, ((f'@ic {c.name}', f"Join the game as {c.name}"), (f"@examine {c.name}", f"@examine {c.name}"))))
+        for objid, c in chars.items():
+            t3.add_row(f"{objid}", send_menu(c.name, ((f'@ic {c.name}', f"Join the game as {c.name}"), (f"@examine {c.name}", f"@examine {c.name}"))))
         out.add(t3)
 
     out.add(fmt.Subheader("Commands"))

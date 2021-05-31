@@ -97,7 +97,7 @@ class HelpCommand(Command):
     re_match = re.compile(r"^(?P<cmd>help)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     def execute(self):
-        categories = self.entry.get_help()
+        categories = self.interpreter.get_help()
 
         gdict = self.match_obj.groupdict()
         args = gdict.get('args', None)

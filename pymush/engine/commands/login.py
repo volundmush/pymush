@@ -15,7 +15,7 @@ class _LoginCommand(Command):
     Simple bit of logic added for the login commands to deal with syntax like:
     connect "user name" password
     """
-    re_quoted = re.compile(r'"(?P<name>.+)"(: +(?P<password>.+)?)?', flags=re.IGNORECASE)
+    re_quoted = re.compile(r'"^(?P<name>.+)"(: +(?P<password>.+)?)?', flags=re.IGNORECASE)
     re_unquoted = re.compile(r'^(?P<name>\S+)(?: +(?P<password>.+)?)?', flags=re.IGNORECASE)
     help_category = 'Login'
 
@@ -24,9 +24,9 @@ class _LoginCommand(Command):
         if not mdict["args"]:
             raise CommandException(error)
 
-        result = self.re_quoted.fullmatch(mdict["args"])
+        result = self.re_quoted.match(mdict["args"])
         if not result:
-            result = self.re_unquoted.fullmatch(mdict["args"])
+            result = self.re_unquoted.match(mdict["args"])
         rdict = result.groupdict()
         if not (rdict["name"] and rdict["password"]):
             raise CommandException(error)
@@ -49,7 +49,7 @@ class ConnectCommand(_LoginCommand):
 
     def execute(self):
         name, password = self.parse_login(self.usage)
-        candidates = self.game.type_index[self.game.obj_classes['USER']]
+        candidates = self.game.type_index['USER']
         account, error = self.game.search_objects(name, candidates=candidates, exact=True)
         if error:
             raise CommandException("Sorry, that was an incorrect username or password.")
@@ -77,7 +77,7 @@ class CreateCommand(_LoginCommand):
     def execute(self):
         name, password = self.parse_login(self.usage)
         pass_hash = self.game.crypt_con.hash(password)
-        account, error = self.game.create_object('user', name)
+        account, error = self.game.create_object('USER', name)
         if error:
             raise CommandException(error)
         account.password = pass_hash

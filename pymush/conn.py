@@ -165,7 +165,7 @@ class GameSession:
     session_matchers = ('ic',)
 
     def __init__(self, user: "GameObject", character: "GameObject"):
-        self.user: "GameObject" = weakref.proxy(user)
+        self.user: "GameObject" = user
         weakchar = weakref.proxy(character)
         self.character: "GameObject" = weakchar
         self.puppet: "GameObject" = weakchar
@@ -208,8 +208,7 @@ class GameSession:
         pass
 
     def on_first_connection(self, connection: "Connection"):
-        loc = self.puppet.get_saved_location('_logout')
-        self.puppet.move_to(loc[0], inventory=loc[1], coordinates=loc[2])
+        pass
 
     def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
         for matcher_name in matcher_categories:

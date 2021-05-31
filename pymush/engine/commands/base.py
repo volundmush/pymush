@@ -24,18 +24,19 @@ class Command:
         return True
 
     @classmethod
-    def help(cls, entry):
+    def help(cls, interpreter):
         """
         This is called by the command-help system if help is called on this command.
         """
+        enactor = interpreter.frame.enactor
         if cls.__doc__:
-            out = fmt.FormatList(entry.enactor)
+            out = fmt.FormatList(enactor)
             out.add(fmt.Header(f"Help: {cls.name}"))
             out.add(fmt.Line(cls.__doc__))
             out.add(fmt.Footer())
-            entry.enactor.send(out)
+            enactor.send(out)
         else:
-            entry.enactor.msg(text="Help is not implemented for this command.")
+            enactor.msg(text="Help is not implemented for this command.")
 
     @classmethod
     def match(cls, enactor, text):

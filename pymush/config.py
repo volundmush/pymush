@@ -28,7 +28,6 @@ class Config(BaseConfig):
         self.classes["game"]["attributemanager"] = "pymush.db.attributes.AttributeManager"
         self.classes["game"]["attributehandler"] = "pymush.db.attributes.AttributeHandler"
         self.classes["game"]["scripthandler"] = "pymush.db.scripts.ScriptHandler"
-        self.classes['game']['lockhandler'] = 'pymush.engine.locks.LockHandler'
         self.classes['game']['contentshandler'] = "pymush.db.objects.base.ContentsHandler"
         self.classes['services']['game'] = "pymush.game.GameService"
 
@@ -37,7 +36,6 @@ class Config(BaseConfig):
         self.classes['gameobject']['ROOM'] = 'pymush.db.objects.room.Room'
         self.classes['gameobject']['THING'] = 'pymush.db.objects.thing.Thing'
         self.classes['gameobject']['USER'] = 'pymush.db.objects.user.User'
-        self.classes['gameobject']['ZONE'] = 'pymush.db.objects.zone.Zone'
 
     def _config_regex(self):
         self.regex['basic_name'] = re.compile(r"(?s)^(\w|\.|-| |'|_)+$")
@@ -58,8 +56,8 @@ class Config(BaseConfig):
         }
 
         m['thing'] = {
-            'thing': 'pymush.engine.commands.mobile.ThingCommandMatcher',
-            'exit': 'pymush.engine.commands.mobile.ThingExitMatcher'
+            'thing': 'pymush.engine.commands.thing.ThingCommandMatcher',
+            'exit': 'pymush.engine.commands.thing.ThingExitMatcher'
         }
 
         m['script'] = {
@@ -92,7 +90,8 @@ class Config(BaseConfig):
         self.gather_modules['functions'].extend([
             'pymush.engine.functions.string',
             'pymush.engine.functions.utility',
-            'pymush.engine.functions.boolean'
+            'pymush.engine.functions.boolean',
+            'pymush.engine.functions.math'
         ])
 
     def _config_game_options(self):
@@ -102,3 +101,6 @@ class Config(BaseConfig):
         o['type_start'] = dict()
         o['default_alevel'] = 0
         o['type_alevel'] = dict()
+        o['function_invocation_limit'] = 10000
+        o['function_recursion_limit'] = 3000
+        o['max_cpu_time'] = 4.0

@@ -1,5 +1,6 @@
 import re
-from rich.text import Text
+from mudstring.patches.text import MudText, OLD_TEXT
+from typing import Optional, Union, List, Tuple, Set, Dict
 
 
 def tabular_table(word_list=None, field_width=26, line_length=78, output_separator=" ", truncate_elements=True):
@@ -298,3 +299,89 @@ def percent_cap(number: int = 0, of: int = 0):
     if div >= 1:
         return 100
     return int(div * 100)
+
+
+def find_matching(text: str, start: int, opening: str, closing: str):
+    escaped = False
+    depth = 0
+    i = start
+    while i < len(text):
+        if escaped:
+            pass
+        else:
+            c = text[i]
+            if c == '\\':
+                escaped = True
+            elif c == opening:
+                depth += 1
+            elif c == closing and depth:
+                depth -= 1
+                if not depth:
+                    return i
+        i += 1
+    return None
+
+
+def find_notspace(text: str, start: int):
+    escaped = False
+    i = start
+    while i < len(text):
+        if escaped:
+            pass
+        else:
+            c = text[i]
+            if c == '\\':
+                escaped = True
+            elif c == ' ':
+                pass
+            else:
+                return i
+        i += 1
+    return None
+
+
+def truthy(test_str: MudText) -> bool:
+    test_str = test_str.squish_spaces()
+    if not test_str:
+        return False
+    if test_str.startswith("#-"):
+        return False
+    number = to_number(test_str)
+    if number is not None:
+        return bool(number)
+    return True
+
+
+_RE_NUMERIC = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
+
+
+def to_number(test_str: MudText) -> Optional[Union[int, float]]:
+    test_str = test_str.squish_spaces()
+
+    if not len(test_str):
+        return 0
+
+    try:
+        match = _RE_NUMERIC.fullmatch(test_str.plain)
+        if match:
+            return eval(test_str.plain)
+        else:
+            return None
+
+    except Exception as e:
+        # TODO: Add proper exception value handling
+        return None
+
+_RE_COMP = re.compile(r"^(?P<comp>(>|<|>=|<=|==|&|\||~|\^))(?P<num>(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?))$")
+
+
+def case_match(test_str: MudText, pattern: MudText) -> bool:
+    test_str = test_str.squish_spaces()
+    pattern = pattern.squish_spaces()
+
+    # first case - if both are numeric, then just let Python handle it with an eval().
+    if (num := _RE_NUMERIC.match(test_str.plain)) and (comp := _RE_COMP.match(pattern.plain)):
+        return eval(f"{test_str.plain}{pattern.plain}")
+    else:
+        # nope, we're going to do a string comparison instead. this is case-insensitive.
+        return test_str.plain.lower() == pattern.plain.lower()

@@ -3,7 +3,11 @@ from mudstring.patches.text import MudText
 from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style, ansify
 
 
-class AnsiFunction(BaseFunction):
+class _AbstractStringFunction(BaseFunction):
+    help_category = 'string'
+
+
+class AnsiFunction(_AbstractStringFunction):
     name = "ansi"
     exact_args = 2
 
@@ -18,7 +22,7 @@ class AnsiFunction(BaseFunction):
         return ansify(style, text)
 
 
-class ScrambleFunction(BaseFunction):
+class ScrambleFunction(_AbstractStringFunction):
     name = "scramble"
     exact_args = 1
 
@@ -29,7 +33,7 @@ class ScrambleFunction(BaseFunction):
             return MudText("")
 
 
-class ReverseFunction(BaseFunction):
+class ReverseFunction(_AbstractStringFunction):
     name = "reverse"
     exact_args = 1
 

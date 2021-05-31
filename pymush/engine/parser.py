@@ -3,6 +3,7 @@ from mudstring.patches.text import MudText, OLD_TEXT
 import re
 from typing import Union, Optional, List, Set, Tuple, Dict
 from enum import IntEnum
+from pymush.utils.text import find_notspace, find_matching
 import weakref
 
 
@@ -49,53 +50,39 @@ class MushSub(IntEnum):
 
 
 class StackFrame:
-    def __init__(self, parent=None):
+
+    def __init__(self, enactor, executor, caller):
         self.parser = None
-        self.parent = parent
-        self.enactor = None
-        self.spoof = None
-        self.executor = None
-        self.caller = None
+        self.parent = None
+        self.entry = None
+        self.break_after = False
+        self.enactor = enactor
+        self.executor = executor
+        self.caller = caller
         self.dvars = list()
         self.dnum = list()
         self.iter = list()
         self.ivars = list()
         self.inum = list()
+        self.number_args = dict()
+
         self.localized = False
-        self.number_args = parent.number_args if parent else dict()
-        self.vars = parent.vars if parent else dict()
-        self.ukeys = parent.ukeys if parent else dict()
-
-    @classmethod
-    def from_entry(cls, entry: "QueueEntry"):
-        frame = cls()
-        frame.enactor = entry.enactor
-        frame.executor = entry.executor
-        frame.spoof = entry.spoof
-        frame.caller = entry.caller
-        return frame
-
-    def make_child(self, inherit=True):
-        frame = StackFrame(parent=self if inherit else None)
-        frame.enactor = self.enactor
-        frame.spoof = self.spoof
-        frame.executor = self.executor
-        frame.caller = self.caller
-        frame.dvars = list(self.dvars)
-        frame.dnum = list(self.dnum)
-        frame.iter = list(self.iter)
-        frame.ivars = list(self.ivars)
-        frame.inum = list(self.inum)
-        if not inherit:
-            frame.localize()
-            frame.localized = False
-        return frame
+        self.vars = dict()
+        self.ukeys = dict()
 
     def localize(self):
         self.localized = True
         # We are localizing this frame, so break the connection to its parent.
         self.vars = dict(self.vars)
         self.ukeys = dict(self.ukeys)
+
+    def inherit(self, from_frame, copy=False):
+        if not copy:
+            self.vars = from_frame.vars
+            self.ukeys = from_frame.ukeys
+        else:
+            self.vars = dict(from_frame.keys)
+            self.ukeys = dict(from_frame.ukeys)
 
     def get_var(self, key):
         if isinstance(key, int) and key in self.vars:
@@ -200,119 +187,49 @@ class Parser:
     re_inum = re.compile(r"^%i_(?P<num>\d+)", flags=re.IGNORECASE)
     re_numeric = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
-    def __init__(self, frame, entry=None):
-        self.frame = frame
+    def __init__(self, entry, enactor, executor, caller, frame=None):
         self.entry = entry
-        frame.parser = self
+        self.frame = StackFrame(enactor, executor, caller) if frame is None else frame
+        self.frame.parser = self
+        self.frame.entry = entry
         self.stack = [self.frame]
-        self.func_count = 0
 
-    @classmethod
-    def from_object(cls, obj: "GameObject", enactor: "GameObject"):
-        frame = StackFrame()
-        frame.executor = weakref.proxy(obj)
-        frame.caller = frame.executor
-        frame.enactor = weakref.proxy(enactor)
-        return cls(frame)
+    def make_child(self, **kwargs):
+        frame = self.make_child_frame(**kwargs)
+        out = self.__class__(self.entry, None, None, None, frame=frame)
+        return out
 
-    def truthy(self, test_str: Union[str, OLD_TEXT]) -> bool:
-        if isinstance(test_str, OLD_TEXT):
-            test_str = test_str.plain
-        test_str = test_str.strip()
-        if not test_str:
-            return False
-        if test_str.startswith("#-"):
-            return False
-        number = self.to_number(test_str)
-        if number is not None:
-            return bool(number)
-        return True
-
-    def to_number(self, test_str: Union[str, OLD_TEXT]) -> Optional[Union[int, float]]:
-        if isinstance(test_str, OLD_TEXT):
-            test_str = test_str.plain
-        test_str = test_str.strip()
-
-        if not len(test_str):
-            return 0
-
-        try:
-            value = None
-            match = self.re_numeric.fullmatch(test_str)
-            if match:
-                mdict = match.groupdict()
-                sign = -1 if mdict['neg'] else 1
-                if mdict['dec'] is not None:
-                    value = float(mdict['value']) * sign
-                else:
-                    value = int(mdict['value']) * sign
-            if value is not None:
-                return value
-            else:
-                return None
-        except Exception as e:
-            # TODO: Add proper exception value handling
-            return None
-
-    def find_matching(self, text: str, start: int, opening: str, closing: str):
-        escaped = False
-        depth = 0
-        i = start
-        while i < len(text):
-            if escaped:
-                pass
-            else:
-                c = text[i]
-                if c == '\\':
-                    escaped = True
-                elif c == opening:
-                    depth += 1
-                elif c == closing and depth:
-                    depth -= 1
-                    if not depth:
-                        return i
-            i += 1
-        return None
-
-    def find_notspace(self, text: str, start: int):
-        escaped = False
-        i = start
-        while i < len(text):
-            if escaped:
-                pass
-            else:
-                c = text[i]
-                if c == '\\':
-                    escaped = True
-                elif c == ' ':
-                    pass
-                else:
-                    return i
-            i += 1
-        return None
-
-    def enter_frame(self, localize=False, enactor=None, executor=None, caller=None, spoof=None, number_args=None,
+    def make_child_frame(self, localize=False, enactor=None, executor=None, caller=None, number_args=None,
                     dnum=None, dvar=None, iter=None, inum=None, ivar=None):
-        frame = self.frame.make_child()
-        self.frame = frame
+        cur_frame = self.frame
+        new_frame = StackFrame(enactor if enactor else self.frame.enactor,
+                               executor if executor else self.frame.executor,
+                               caller if caller else self.frame.caller)
+
         if localize:
-            frame.localize()
-        self.stack.append(frame)
+            new_frame.localized = True
+        new_frame.inherit(cur_frame, copy=localize)
+
         if number_args:
-            frame.number_args = number_args
-        if executor:
-            frame.executor = executor
-        if spoof:
-            frame.spoof = spoof
-        if caller:
-            frame.caller = caller
+            new_frame.number_args = number_args
         if dnum is not None:
-            frame.dnum.insert(0, dnum)
-            frame.dvars.insert(0, dvar)
+            new_frame.dnum.insert(0, dnum)
+            new_frame.dvars.insert(0, dvar)
         if iter is not None:
-            frame.iter.insert(0, iter)
-            frame.inum.insert(0, inum)
-            frame.ivars.insert(0, ivar)
+            new_frame.iter.insert(0, iter)
+            new_frame.inum.insert(0, inum)
+            new_frame.ivars.insert(0, ivar)
+        return new_frame
+
+    def enter_frame(self, **kwargs):
+        cur_frame = self.frame
+        new_frame = self.make_child_frame(**kwargs)
+
+        new_frame.parent = cur_frame
+        new_frame.entry = self.entry
+        new_frame.parser = self
+        self.stack.append(new_frame)
+        self.frame = new_frame
 
     def exit_frame(self):
         if self.stack:
@@ -320,9 +237,9 @@ class Parser:
             if self.stack:
                 self.frame = self.stack[-1]
 
-    def evaluate(self, text: Union[None, str, OLD_TEXT], localize: bool = False, spoof: Optional["GameObject"] = None,
-                  called_recursively: bool = False, executor: Optional["GameObject"] = None,
-                  caller: Optional["GameObject"] = None, number_args=None, no_eval=False, iter=None, inum=None,
+    def evaluate(self, text: Union[None, str, OLD_TEXT], localize: bool = False,
+                 called_recursively: bool = False, executor: Optional["GameObject"] = None,
+                 caller: Optional["GameObject"] = None, number_args=None, no_eval=False, iter=None, inum=None,
                  ivar=None):
 
         if not text:
@@ -331,7 +248,11 @@ class Parser:
             text = MudText(text)
 
         if not no_eval:
-            self.enter_frame(localize, spoof=spoof, executor=executor, caller=caller, number_args=number_args,
+            self.entry.recursion_count += 1
+            if self.entry.recursion_count >= self.entry.queue.function_recursion_limit:
+                return MudText("#-1 FUNCTION RECURSION LIMIT EXCEEDED")
+
+            self.enter_frame(localize=localize, executor=executor, caller=caller, number_args=number_args,
                              iter=iter, inum=inum, ivar=ivar)
 
         output = MudText("")
@@ -341,7 +262,7 @@ class Parser:
 
         first_paren = False
         no_hoover = False
-        i = self.find_notspace(plain, 0)
+        i = find_notspace(plain, 0)
         segment_start = i
         if i is not None:
             while i < len(plain):
@@ -353,7 +274,7 @@ class Parser:
                         escaped = True
                         i += 1
                     elif c == ' ':
-                        notspace = self.find_notspace(plain, i)
+                        notspace = find_notspace(plain, i)
                         if notspace is not None:
                             if i > segment_start:
                                 output += text[segment_start:i]
@@ -368,19 +289,19 @@ class Parser:
                             break
                     elif c == '[' and not no_eval:
                         # This is potentially a recursion. Seek a matching ]
-                        closing = self.find_matching(plain, i, '[', ']')
+                        closing = find_matching(plain, i, '[', ']')
                         if closing is not None:
                             if i > segment_start:
                                 output += text[segment_start:i]
-                            output += self.evaluate(text[i+1:closing], called_recursively=True)
-                            segment_start = closing+1
-                            i = closing+1
+                            output += self.evaluate(text[i + 1:closing], called_recursively=True)
+                            segment_start = closing + 1
+                            i = closing + 1
                         else:
                             i += 1
                     elif c == '(' and not no_eval and not first_paren:
                         # this is potentially a function call. Seek a matching )
                         first_paren = True
-                        closing = self.find_matching(plain, i, '(', ')')
+                        closing = find_matching(plain, i, '(', ')')
                         if closing is not None:
                             if i > segment_start:
                                 output += text[segment_start:i]
@@ -389,16 +310,18 @@ class Parser:
                                 fdict = f_match.groupdict()
                                 func_name = fdict['func']
                                 bangs = fdict['bangs']
-                                if (func := self.find_function(func_name)):
+                                if (func := self.find_function(func_name,
+                                                               default=NotFoundFunction if called_recursively else None)):
                                     # hooray we have a function!
-                                    ready_fun = func(self, func_name, text[i+1:closing])
-                                    output = ready_fun.execute()
-                                else:
-                                    if called_recursively:
-                                        notfound_fun = NotFoundFunction(self, func_name, text[i+1:closing])
-                                        output = notfound_fun.execute()
-                                segment_start = closing+1
-                                i = closing+1
+                                    self.entry.function_invocation_count += 1
+                                    if self.entry.function_invocation_count >= self.entry.queue.function_invocation_limit:
+                                        output = MudText("#-1 FUNCTION INVOCATION LIMIT EXCEEDED")
+                                        break
+                                    else:
+                                        ready_fun = func(self, func_name, text[i + 1:closing])
+                                        output = ready_fun.execute()
+                                segment_start = closing + 1
+                                i = closing + 1
                         else:
                             i += 1
                     elif c == '%' and not no_eval:
@@ -427,10 +350,12 @@ class Parser:
         # if we reach down here, then we are doing well and can pop a frame off.
         if not no_eval:
             self.exit_frame()
+            self.entry.recursion_count -= 1
+
         return output
 
     def valid_sub(self, text: str, start: int):
-        simple = text[start:start+2]
+        simple = text[start:start + 2]
         sub = None
         if simple in ('%R', '%r'):
             sub = (MushSub.NEWLINE, None)
@@ -475,7 +400,7 @@ class Parser:
             number = gdict['number']
             length = len(number)
             number = int(number)
-            return 1+length, (MushSub.NUMBER_ARG_VALUE, number)
+            return 1 + length, (MushSub.NUMBER_ARG_VALUE, number)
 
         if t_start.lower().startswith('%q'):
             # this is a q-register of some kind.
@@ -505,5 +430,6 @@ class Parser:
 
         return None
 
-    def find_function(self, funcname: str):
-        return self.entry.queue.service.functions.get(funcname.lower(), None)
+    def find_function(self, funcname: str, default=None):
+        found = self.entry.queue.game.functions.get(funcname.lower(), None)
+        return found if found else default
