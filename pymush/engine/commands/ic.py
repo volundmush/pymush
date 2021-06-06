@@ -19,8 +19,8 @@ class OOCCommand(Command):
 class SessionPyCommand(PyCommand):
 
     @classmethod
-    def access(cls, entry):
-        return entry.session.get_alevel() >= 10
+    def access(cls, interpreter):
+        return interpreter.session.get_alevel() >= 10
 
     def available_vars(self):
         out = super().available_vars()
@@ -33,10 +33,10 @@ class QuellCommand(PyCommand):
     re_match = re.compile(r"^(?P<cmd>@quell)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     @classmethod
-    def access(cls, entry):
-        print(f"CHECKING QUELL... {entry}")
-        print(f"alevel: {entry.session.get_alevel(ignore_quell=True)}")
-        return entry.session.get_alevel(ignore_quell=True) > 0
+    def access(cls, interpreter):
+        print(f"CHECKING QUELL... {interpreter}")
+        print(f"alevel: {interpreter.session.get_alevel(ignore_quell=True)}")
+        return interpreter.session.get_alevel(ignore_quell=True) > 0
 
     def execute(self):
         self.entry.session.quelled = not self.entry.session.quelled
@@ -59,6 +59,9 @@ class RunCommand(MushCommand):
 
 
 class SessionCommandMatcher(PythonCommandMatcher):
+
+    def access(self, interpreter: "Interpreter"):
+        return bool(interpreter.session)
 
     def at_cmdmatcher_creation(self):
         self.add(OOCCommand)

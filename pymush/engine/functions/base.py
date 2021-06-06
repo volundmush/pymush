@@ -2,9 +2,10 @@ from mudstring.patches.text import MudText, OLD_TEXT
 from typing import Union, Iterable, List
 from pymush.utils.text import to_number
 from pymush.utils import formatter as fmt
+from pymush.engine.api import BaseApi
 
 
-class BaseFunction:
+class BaseFunction(BaseApi):
     name = None
     aliases = set()
     min_args = None
@@ -120,33 +121,6 @@ class BaseFunction:
 
     def do_execute(self):
         return MudText(f"#-1 FUNCTION {self.name.upper()} IS NOT IMPLEMENTED")
-
-    def split_by(self, text: Union[str, OLD_TEXT], delim: Union[str, OLD_TEXT] = ' '):
-        plain = text.plain if isinstance(text, OLD_TEXT) else text
-        delim = delim.plain if isinstance(delim, OLD_TEXT) else delim
-
-        i = self.parser.find_notspace(plain, 0)
-        start_segment = i
-
-        while i < len(plain):
-            c = plain[i]
-            if c == delim:
-                elem = text[start_segment:i]
-                if len(elem):
-                    elem = self.parser.evaluate(elem, no_eval=True)
-                    if len(elem):
-                        yield elem
-                start_segment = i
-            else:
-                pass
-            i += 1
-
-        if i > start_segment:
-            elem = text[start_segment:i]
-            if len(elem):
-                elem = self.parser.evaluate(elem, no_eval=True)
-                if len(elem):
-                    yield elem
 
     def join_by(self, lines: Iterable[OLD_TEXT], delim: OLD_TEXT):
         out = MudText("")

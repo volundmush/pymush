@@ -136,33 +136,55 @@ class Interpreter:
     def __init__(self, entry, parser, actions: MudText, split: bool, parent=None):
         self.entry = entry
         self.parser = parser
-        self.parent = parent
+        self.parent = weakref.proxy(parent) if parent else None
         self.actions = actions
         self.split_actions = split
+
+    @property
+    def executor(self):
+        return self.parser.frame.executor
+
+    @property
+    def enactor(self):
+        return self.parser.frame.enactor
+
+    @property
+    def caller(self):
+        return self.parser.frame.caller
+
+    @property
+    def session(self):
+        return self.entry.session
+
+    @property
+    def game(self):
+        return self.entry.game
 
     def make_parser(self, **kwargs):
         return self.parser.make_child(**kwargs)
 
+    def make_child(self, actions: MudText, split: bool):
+        return self.__class__(self.entry, self.parser.make_child(), actions, split, self)
+
     def get_help(self):
         categories = defaultdict(set)
         if self.entry.type == QueueEntryType.LOGIN:
-            self.entry.connection.gather_login_help(self.entry, categories)
+            self.entry.connection.gather_login_help(self, categories)
         elif self.entry.type == QueueEntryType.OOC:
-            self.entry.connection.gather_selectscreen_help(self.entry, categories)
+            self.entry.connection.gather_selectscreen_help(self, categories)
         elif self.entry.type == QueueEntryType.IC:
-            self.entry.session.gather_help(self.entry, categories)
+            self.entry.session.gather_help(self, categories)
         return categories
 
-    def find_cmd(self, action: Union[str, OLD_TEXT]):
-        plain = action.plain if isinstance(action, OLD_TEXT) else action
+    def find_cmd(self, action: MudText):
         if self.entry.type == QueueEntryType.LOGIN:
-            return self.entry.connection.find_login_cmd(self.entry, plain)
+            return self.entry.connection.find_login_cmd(self, action)
         elif self.entry.type == QueueEntryType.OOC:
-            return self.entry.connection.find_selectscreen_cmd(self.entry, plain)
+            return self.entry.connection.find_selectscreen_cmd(self, action)
         elif self.entry.type == QueueEntryType.IC:
-            return self.entry.session.find_cmd(self.entry, plain)
+            return self.entry.session.find_cmd(self, action)
         elif self.entry.type == QueueEntryType.SCRIPT:
-            return self.entry.enactor.find_cmd(self.entry, plain)
+            return self.entry.enactor.find_cmd(self, action)
 
     def action_splitter(self, actions: MudText):
         plain = actions.plain
@@ -202,8 +224,9 @@ class Interpreter:
         if i > start_segment:
             yield actions[start_segment:i].squish_spaces()
 
-    def spawn_action_list(self, frame, actions: MudText):
+    def spawn_action_list(self, actions: MudText, **kwargs):
         entry = self.entry.__class__(QueueEntryType.SCRIPT)
+        frame = self.parser.make_child_frame(**kwargs)
         entry.enactor = frame.enactor
         entry.executor = frame.executor
         entry.caller = frame.caller
@@ -212,7 +235,7 @@ class Interpreter:
         entry.start_frame = frame
         self.entry.queue.push(entry)
 
-    def execute(self, nobreak=False, localize=False, number_args=None, dnum=None, dvar=None):
+    def execute(self, nobreak=False, **kwargs):
         actions = self.actions
         actions = actions.squish_spaces()
         if self.split_actions:
@@ -222,16 +245,12 @@ class Interpreter:
         else:
             action_list = [actions]
 
-        self.parser.enter_frame(localize=localize, number_args=number_args, dnum=dnum, dvar=dvar)
+        self.parser.enter_frame(**kwargs)
 
         for action in action_list:
             cmd = self.find_cmd(action)
             if cmd:
                 try:
-                    cmd.game = self.entry.game
-                    cmd.entry = self.entry
-                    cmd.parser = self.parser
-                    cmd.interpreter = self
                     cmd.at_pre_execute()
                     cmd.execute()
                     cmd.at_post_execute()

@@ -85,12 +85,13 @@ class AttributeRequestType(IntEnum):
 @dataclass
 class AttributeRequest:
     accessor: "GameObject"
-    parser: Optional["Parser"]
     req_type: AttributeRequestType
     name: Union[str, OLD_TEXT]
-    value: Optional[Union[str, OLD_TEXT]]
-    attr_base: Optional[Attribute]
-    attr: Optional[AttributeValue]
+    parser: "Parser"
+    value: Optional[Union[str, OLD_TEXT]] = None
+    attr_base: Optional[Attribute] = None
+    attr: Optional[AttributeValue] = None
+    error: Optional[MudText] = None
 
 
 class AttributeHandler:
@@ -142,9 +143,8 @@ class AttributeHandler:
     def api_access(self, request: AttributeRequest) -> bool:
         return True
 
-    def api_can_see(self, accessor: "GameObject", name: Union[str, OLD_TEXT]) -> MudText:
-        if not self.api_access(accessor):
-            return MudText("#-1 NO PERMISSION TO GET ATTRIBUTE")
+    def api_can_see(self, accessor: "GameObject", name: Union[str, OLD_TEXT]) -> bool:
+        return self.api_access(accessor)
 
     def _get_inherit(self, request: AttributeRequest):
         attr_base = self.manager.get(request.name)
@@ -160,37 +160,43 @@ class AttributeHandler:
                 if attr:
                     request.attr = attr
 
-    def api_get(self, request: AttributeRequest) -> MudText:
+    def api_get(self, request: AttributeRequest):
         self._get_inherit(request)
         if request.attr is None:
-            return EMPTY
+            request.value = EMPTY
+            return
         if not request.attr.can_see(request, self):
-            return MudText("#-1 NO PERMISSION TO GET ATTRIBUTE")
-        return request.attr.value
+            request.error = MudText("NO PERMISSION TO GET ATTRIBUTE")
+            return
+        request.value = request.attr.value
 
-    def api_set(self, request: AttributeRequest) -> MudText:
+    def api_set(self, request: AttributeRequest):
         try:
             attr_base = self.manager.get_or_create(request.name)
             request.attr_base = attr_base
         except ValueError as err:
-            return MudText(f"#-1 {str(err).upper()}")
+            request.error = MudText(f"#-1 {str(err).upper()}")
+            return
         attr = self.attributes.get(attr_base, None)
         if attr:
             request.attr = attr
             if not attr.can_set(request, self):
-                return MudText("#-1 NO PERMISSION TO SET ATTRIBUTE")
+                request.error = MudText("#-1 NO PERMISSION TO SET ATTRIBUTE")
+                return
             attr.value = request.value
         else:
             attr = self.attr_class(attr_base, request.value)
             self.attributes[attr_base] = attr
-        return EMPTY
+        return
 
-    def api_request(self, request: AttributeRequest) -> MudText:
+    def api_request(self, request: AttributeRequest):
         if not self.api_access(request):
-            return MudText("#-1 PERMISSION DENIED FOR ATTRIBUTES")
-        request.parser = self.owner.parser(enactor=request.accessor)
+            request.error = MudText("PERMISSION DENIED FOR ATTRIBUTES")
+            return
+
         if request.req_type == AttributeRequestType.SET:
-            return self.api_set(request)
+            self.api_set(request)
         elif request.req_type == AttributeRequestType.GET:
-            return self.api_get(request)
-        return EMPTY
+            self.api_get(request)
+        else:
+            request.error = MudText("Malformed API request!")

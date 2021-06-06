@@ -65,6 +65,7 @@ class StackFrame:
         self.ivars = list()
         self.inum = list()
         self.number_args = dict()
+        self.stext = None
 
         self.localized = False
         self.vars = dict()
@@ -133,8 +134,11 @@ class StackFrame:
                     return MudText(loc.dbref)
 
         elif subtype == MushSub.NUMBER_ARG_VALUE:
-            if data in self.number_args:
+            print(f"NUMBER ARG REQUEST: {data}")
+            try:
                 return self.number_args[data]
+            except KeyError:
+                return MudText("")
 
         elif subtype == MushSub.ARG_COUNT:
             return MudText(str(len(self.number_args)))
@@ -172,6 +176,12 @@ class StackFrame:
                 val = MudText("#-1 ARGUMENT OUT OF RANGE")
             return val
 
+        elif subtype == MushSub.STEXT:
+            if self.stext is not None:
+                return self.stext
+            else:
+                return MudText("#-1 ARGUMENT OUT OF RANGE")
+
         return MudText('')
 
 
@@ -200,7 +210,7 @@ class Parser:
         return out
 
     def make_child_frame(self, localize=False, enactor=None, executor=None, caller=None, number_args=None,
-                    dnum=None, dvar=None, iter=None, inum=None, ivar=None):
+                    dnum=None, dvar=None, iter=None, inum=None, ivar=None, stext=None):
         cur_frame = self.frame
         new_frame = StackFrame(enactor if enactor else self.frame.enactor,
                                executor if executor else self.frame.executor,
@@ -219,6 +229,8 @@ class Parser:
             new_frame.iter.insert(0, iter)
             new_frame.inum.insert(0, inum)
             new_frame.ivars.insert(0, ivar)
+        if stext is not None:
+            new_frame.stext = stext
         return new_frame
 
     def enter_frame(self, **kwargs):
@@ -240,7 +252,7 @@ class Parser:
     def evaluate(self, text: Union[None, str, OLD_TEXT], localize: bool = False,
                  called_recursively: bool = False, executor: Optional["GameObject"] = None,
                  caller: Optional["GameObject"] = None, number_args=None, no_eval=False, iter=None, inum=None,
-                 ivar=None):
+                 ivar=None, stext=None):
 
         if not text:
             return MudText("")
@@ -253,7 +265,7 @@ class Parser:
                 return MudText("#-1 FUNCTION RECURSION LIMIT EXCEEDED")
 
             self.enter_frame(localize=localize, executor=executor, caller=caller, number_args=number_args,
-                             iter=iter, inum=inum, ivar=ivar)
+                             iter=iter, inum=inum, ivar=ivar, stext=stext)
 
         output = MudText("")
 
@@ -271,7 +283,10 @@ class Parser:
                 else:
                     c = plain[i]
                     if c == '\\':
-                        escaped = True
+                        if not no_eval:
+                            escaped = True
+                        else:
+                            output += text[i]
                         i += 1
                     elif c == ' ':
                         notspace = find_notspace(plain, i)

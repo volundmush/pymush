@@ -1,20 +1,21 @@
 import re
 from pymush.utils import formatter as fmt
 from mudstring.patches.text import MudText, OLD_TEXT
-from typing import Union
+from typing import Union, Optional, Tuple, List
+from ..api import BaseApi
 
 
 class CommandException(Exception):
     pass
 
 
-class Command:
+class Command(BaseApi):
     name = None  # Name must be set to a string!
     aliases = []
     help_category = None
 
     @classmethod
-    def access(cls, entry: "QueueEntry"):
+    def access(cls, interpreter: "Interpreter"):
         """
         This returns true if <enactor> is able to see and use this command.
 
@@ -39,7 +40,7 @@ class Command:
             enactor.msg(text="Help is not implemented for this command.")
 
     @classmethod
-    def match(cls, enactor, text):
+    def match(cls, enactor, text: MudText):
         """
         Called by the CommandGroup to determine if this command matches.
         Returns False or a Regex Match object.
@@ -47,17 +48,23 @@ class Command:
         Or any kind of match, really. The parsed match will be returned and re-used by .execute()
         so use whatever you want.
         """
-        if (result := cls.re_match.fullmatch(text)):
+        if (result := cls.re_match.fullmatch(text.plain)):
             return result
 
-    def __init__(self, entry, match_obj):
+    def __init__(self, interpreter, text, match_obj):
         """
         Instantiates the command.
         """
+        self.text = text
         self.match_obj = match_obj
-        self.entry = entry
-        self.parser = None
-        self.game = None
+        self.interpreter = interpreter
+
+    def split_args(self, text: Union[str, MudText]):
+        return self.split_cmd_args(text)
+
+    @property
+    def parser(self):
+        return self.interpreter.parser
 
     def execute(self):
         """
@@ -88,100 +95,6 @@ class MushCommand(Command):
             if sw not in self.available_switches:
                 raise CommandException(f"{self.name.upper()} doesn't know switch: /{sw}")
 
-    def split_args(self, text: Union[str, OLD_TEXT]):
-        escaped = False
-        curly_depth = 0
-        i = 0
-        start_segment = i
-        plain = text.plain if isinstance(text, OLD_TEXT) else text
-
-        while i < len(plain):
-            if escaped:
-                escaped = False
-            else:
-                c = plain[i]
-                if c == '{':
-                    curly_depth += 1
-                elif c == '}' and curly_depth:
-                    curly_depth -= 1
-                elif c == '\\':
-                    escaped = True
-                elif c == ',':
-                    yield self.parser.evaluate(text[start_segment:i], no_eval=True)
-                    start_segment = i+1
-            i += 1
-
-        if i > start_segment:
-            yield self.parser.evaluate(text[start_segment:i], no_eval=True)
-
-    def split_by(self, text: Union[str, OLD_TEXT], delim=' '):
-        plain = text.plain if isinstance(text, OLD_TEXT) else text
-
-        i = self.parser.find_notspace(plain, 0)
-        start_segment = i
-
-        while i < len(plain):
-            c = plain[i]
-            if c == delim:
-                elem = text[start_segment:i]
-                if len(elem):
-                    elem = self.parser.evaluate(elem, no_eval=True)
-                    if len(elem):
-                        yield elem
-                start_segment = i
-            else:
-                pass
-            i += 1
-
-        if i > start_segment:
-            elem = text[start_segment:i]
-            if len(elem):
-                elem = self.parser.evaluate(elem, no_eval=True)
-                if len(elem):
-                    yield elem
-
-    def eqsplit_args(self, text: Union[str, OLD_TEXT]):
-        escaped = False
-
-        plain = text.plain if isinstance(text, OLD_TEXT) else text
-        paren_depth = 0
-        curly_depth = 0
-        square_depth = 0
-        i = -1
-
-        while True:
-            i += 1
-            if i > len(plain) - 1:
-                break
-            c = plain[i]
-
-            if escaped:
-                escaped = False
-                continue
-            else:
-                if c == '\\':
-                    escaped = True
-                elif c == '(':
-                    paren_depth += 1
-                elif c == ')' and paren_depth:
-                    paren_depth -= 1
-                elif c == '[':
-                    square_depth += 1
-                elif c == ']' and square_depth:
-                    square_depth -= 1
-                elif c == '{':
-                    curly_depth += 1
-                elif c == '}' and curly_depth:
-                    curly_depth -= 1
-                elif c == '=':
-                    if not (paren_depth or square_depth or curly_depth):
-                        lsargs = self.parser.evaluate(text[:i], no_eval=True)
-                        if not len(lsargs):
-                            lsargs = MudText("")
-                        rsargs = self.parser.evaluate(text[i+1:], no_eval=True)
-                        if not len(rsargs):
-                            rsargs = MudText("")
-                        return lsargs, rsargs
 
     @classmethod
     def match(cls, entry, text):
@@ -201,17 +114,17 @@ class MushCommand(Command):
                 flags=re.IGNORECASE)
             matcher = cls.re_match
 
-        if (result := matcher.fullmatch(text)):
+        if (result := matcher.fullmatch(text.plain)):
             return result
 
-    def __init__(self, entry, match_obj):
-        super().__init__(entry, match_obj)
+    def __init__(self, interpreter, text, match_obj):
+        super().__init__(interpreter, text, match_obj)
         self.mdict = self.match_obj.groupdict()
-        self.cmd = self.mdict["cmd"]
-        self.args = self.mdict["args"]
+        self.cmd = text[match_obj.start('cmd'):match_obj.end('cmd')]
+        self.args = text[match_obj.start('args'):match_obj.end('args')]
         switches = '' if self.mdict['switches'] is None else self.mdict['switches']
+        self.mode = self.mdict['mode']
         self.switches = {sw.strip().lower() for sw in switches.strip('/').split('/')} if switches else set()
-        self.remaining = self.args
 
 
 class BaseCommandMatcher:
@@ -223,7 +136,7 @@ class BaseCommandMatcher:
         self.at_cmdmatcher_creation()
 
     @classmethod
-    def access(self, entry: "QueueEntry"):
+    def access(self, interpreter: "Interpreter"):
         return True
 
     def at_cmdmatcher_creation(self):
@@ -233,10 +146,10 @@ class BaseCommandMatcher:
         """
         pass
 
-    def match(self, entry: "QueueEntry", text: str):
+    def match(self, interpreter: "Interpreter", text: MudText):
         pass
 
-    def populate_help(self, entry: "QueueEntry", data):
+    def populate_help(self, interpreter: "Interpreter", data):
         pass
 
     def __repr__(self):
@@ -252,12 +165,12 @@ class PythonCommandMatcher(BaseCommandMatcher):
     def add(self, cmd_class):
         self.cmds.add(cmd_class)
 
-    def match(self, entry: "QueueEntry", text: str):
+    def match(self, interpreter: "Interpreter", text: MudText):
         for cmd in self.cmds:
-            if cmd.access(entry) and (result := cmd.match(entry, text)):
-                return cmd(entry, result)
+            if cmd.access(interpreter) and (result := cmd.match(interpreter, text)):
+                return cmd(interpreter, text, result)
 
-    def populate_help(self, entry: "QueueEntry", data):
+    def populate_help(self, interpreter: "Interpreter", data):
         for cmd in self.cmds:
-            if cmd.help_category and cmd.access(entry):
+            if cmd.help_category and cmd.access(interpreter):
                 data[cmd.help_category].add(cmd)

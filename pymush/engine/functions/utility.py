@@ -1,5 +1,7 @@
 from . base import BaseFunction
 from mudstring.patches.text import MudText
+from pymush.utils.text import case_match
+from pymush.db.attributes import AttributeRequest, AttributeRequestType
 
 
 class SetRFunction(BaseFunction):
@@ -100,3 +102,43 @@ class IBreakFunction(BaseFunction):
         except IndexError:
             return MudText("#-1 ARGUMENT OUT OF RANGE")
 
+
+class SwitchFunction(BaseFunction):
+    name = 'switch'
+    min_args = 3
+
+    def do_execute(self):
+        matcher = self.parser.evaluate(self.args[0])
+        if len(self.args[1:]) % 2 == 0:
+            default = MudText('')
+            args = self.args[1:]
+        else:
+            default = self.parser.evaluate(self.args[-1], stext=matcher)
+            args = self.args[1:-1]
+
+        for case, outcome in zip(args[0::2], args[1::2]):
+            if case_match(matcher, self.parser.evaluate(case, stext=matcher)):
+                return self.parser.evaluate(outcome, stext=matcher)
+        return default
+
+
+class UFunction(BaseFunction):
+    name = 'u'
+    min_args = 1
+
+    def do_execute(self):
+        obj, attr_name, err = self.target_obj_attr(self.parser.evaluate(self.args[0]))
+        if err:
+            return MudText("#-1 UNABLE TO LOCATE OBJECT")
+
+        req = self.get_attr(obj, attr_name)
+        if req.error:
+            return req.error
+        code = req.value
+        print(f"CODE IS: {code}")
+
+        number_args = [self.parser.evaluate(arg) for arg in self.args[1:]]
+
+        print(f"NUMBER ARGS is: {number_args}")
+
+        return self.parser.evaluate(code, number_args=number_args, executor=obj, caller=self.executor)

@@ -15,7 +15,7 @@ class _LoginCommand(Command):
     Simple bit of logic added for the login commands to deal with syntax like:
     connect "user name" password
     """
-    re_quoted = re.compile(r'"^(?P<name>.+)"(: +(?P<password>.+)?)?', flags=re.IGNORECASE)
+    re_quoted = re.compile(r'^"(?P<name>.+)"(: +(?P<password>.+)?)?', flags=re.IGNORECASE)
     re_unquoted = re.compile(r'^(?P<name>\S+)(?: +(?P<password>.+)?)?', flags=re.IGNORECASE)
     help_category = 'Login'
 
@@ -110,7 +110,7 @@ class QuitCommand(Command):
 class LoginPyCommand(PyCommand):
 
     @classmethod
-    def access(cls, entry):
+    def access(cls, interpreter):
         #if entry.game.objects:
         #    return False
         return True
@@ -121,7 +121,7 @@ class Test(Command):
     re_match = re.compile(r"^(?P<cmd>test)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     @classmethod
-    def access(cls, entry):
+    def access(cls, interpreter):
         return True
 
     def execute(self):

@@ -92,27 +92,27 @@ class ExitCommand(Command):
 class ThingExitMatcher(BaseCommandMatcher):
     priority = 110
 
-    def match(self, entry, text):
-        loc = entry.enactor.location
+    def match(self, interpreter, text):
+        loc = interpreter.enactor.location
         if not loc:
             return
 
-        if text.lower().startswith('goto '):
+        if text.plain.lower().startswith('goto '):
             text = text[5:]
-        elif text.lower().startswith('go '):
+        elif text.plain.lower().startswith('go '):
             text = text[3:]
 
         if text:
             exits = loc.namespaces['EXIT']
             if not exits:
                 return
-            found, err = entry.enactor.locate_object(text, general=False, dbref=False, location=False, contents=False,
+            found, err = interpreter.enactor.locate_object(text, general=False, dbref=False, location=False, contents=False,
                                                      candidates=exits, use_nicks=False,
                                                      use_aliases=True, use_dub=False, first_only=True, multi_match=False)
             if not found:
                 return
             else:
-                return ExitCommand(entry, found[0])
+                return ExitCommand(interpreter, text, found[0])
 
     def populate_help(self, enactor, data):
         data['Navigation'].add(ExitCommand)

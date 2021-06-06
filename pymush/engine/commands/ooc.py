@@ -26,7 +26,7 @@ class PennBindCommand(MushCommand):
         password = self.gather_arg()
         if not (target and password):
             raise CommandException("Usage: @pbind <name>=<password>")
-        character, error = self.core.search_tag("penn_character", target, exact=True)
+        character, error = self.game.search_tag("penn_character", target, exact=True)
         if error:
             raise CommandException("Sorry, that was an incorrect username or password.")
         if not character:
@@ -53,7 +53,7 @@ class CharCreateCommand(Command):
         if not (name := mdict.get("args", None)):
             raise CommandException("Must enter a name for the character!")
         identity = self.enactor.core.identity_prefix['C']
-        char, error = self.core.mapped_typeclasses["mobile"].create(name=name, identity=identity)
+        char, error = self.game.mapped_typeclasses["mobile"].create(name=name, identity=identity)
         if error:
             raise CommandException(error)
         acc = self.enactor.relations.get('account', None)
@@ -86,7 +86,7 @@ class SelectScreenCommand(Command):
     re_match = re.compile(r"^(?P<cmd>look)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     def execute(self):
-        self.core.selectscreen(self.enactor)
+        self.game.selectscreen(self.enactor)
 
 
 class ThinkCommand(MushCommand):

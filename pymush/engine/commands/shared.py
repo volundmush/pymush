@@ -24,8 +24,8 @@ class PyCommand(Command):
         }
 
     @classmethod
-    def access(cls, enactor):
-        return enactor.get_slevel() >= 10
+    def access(cls, interpreter):
+        return interpreter.get_slevel() >= 10
 
     def flush(self):
         pass

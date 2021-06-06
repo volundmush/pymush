@@ -102,6 +102,7 @@ class BoundFunction(_MathFunction):
 
     See Also: between(), fbetween(), fbound(), gt(), lt(), gte(), lte()
     """
+    name = 'bound'
     min_args = 2
     max_args = 3
 
@@ -143,11 +144,11 @@ class CeilFunction(_MathFunction):
         return math.ceil(numbers[0])
 
 
-def divall(numbers):
+def _divall(numbers):
     return reduce(operator.idiv, numbers)
 
 
-def fdivall(numbers):
+def _fdivall(numbers):
     return reduce(operator.div, numbers)
 
 
@@ -174,7 +175,7 @@ class DivFunction(_SimpleMathFunction):
     See Also: add(), fdiv(), mod(), mul(), round(), sub(), trunc()
     """
     name = 'div'
-    func = divall
+    func = _divall
 
 
 class FDivFunction(_SimpleMathFunction):
@@ -200,7 +201,7 @@ class FDivFunction(_SimpleMathFunction):
     See Also: add(), fdiv(), mod(), mul(), round(), sub(), trunc()
     """
     name = 'fdiv'
-    func = fdivall
+    func = _fdivall
 
 
 class FloorFunction(_MathFunction):
@@ -274,8 +275,8 @@ class LMathFunction(_MathFunction):
         'median': numpy.median,
         'mode': stats.mode,
         'mul': numpy.prod,
-        'div': divall,
-        'fdiv': fdivall
+        'div': _divall,
+        'fdiv': _fdivall
     }
 
     def math_execute(self):

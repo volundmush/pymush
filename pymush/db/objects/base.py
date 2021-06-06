@@ -507,9 +507,11 @@ class GameObject:
             pass
         return whole, words
 
-    def locate_object(self, name: str, general=True, dbref=True, location=True, contents=True, candidates=None,
+    def locate_object(self, name: Union[str, MudText], general=True, dbref=True, location=True, contents=True, candidates=None,
                       use_names=True, use_nicks=True, use_aliases=True, use_dub=True, exact=False, first_only=False,
                       multi_match=False, filter_visible=True):
+        if isinstance(name, MudText):
+            name = name.plain
         name = name.strip()
         nlower = name.lower()
         out = list()
@@ -715,3 +717,4 @@ class GameObject:
 
     def setup(self):
         pass
+

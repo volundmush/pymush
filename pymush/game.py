@@ -52,8 +52,15 @@ class GameService(Service):
             self.option_classes.update(callables_from_module(path))
 
         for path in self.app.config.gather_modules['functions']:
-            results = {v.name: v for v in callables_from_module(path).values()}
-            self.functions.update(results)
+            try:
+                funcs = callables_from_module(path)
+                results = dict()
+                for v in funcs.values():
+                    results[v.name] = v
+                self.functions.update(results)
+            except Exception as err:
+                print(f"HAVING TROUBLE LOADING: {v}")
+                raise err
 
     async def async_setup(self):
         pass

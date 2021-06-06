@@ -5,3 +5,6 @@ argon2_cffi
 pytz
 numpy
 scipy
+lupa
+func-timeout
+ply
