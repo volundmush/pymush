@@ -1,17 +1,22 @@
-from athanor.app import Service
 import asyncio
-from typing import Optional, Iterable, Union
-from .engine.cmdqueue import CmdQueue
-from collections import OrderedDict, defaultdict
-from pymush.db.objects.base import GameObject
-from .db.attributes import AttributeManager
-from passlib.context import CryptContext
-from athanor.utils import import_from_module
 import time
-from .utils.misc import callables_from_module
-from athanor.utils import partial_match
 import weakref
+
+from typing import Optional, Iterable, Union
+from collections import OrderedDict, defaultdict
+
+from passlib.context import CryptContext
+
 from mudstring.patches.text import OLD_TEXT
+
+from athanor.app import Service
+from athanor.utils import import_from_module
+from athanor.utils import partial_match
+
+from pymush.db.objects.base import GameObject
+
+from .engine.cmdqueue import CmdQueue
+from .utils.misc import callables_from_module
 
 
 class GameService(Service):

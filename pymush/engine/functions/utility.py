@@ -1,7 +1,8 @@
-from . base import BaseFunction
 from mudstring.patches.text import MudText
+
 from pymush.utils.text import case_match
 from pymush.db.attributes import AttributeRequest, AttributeRequestType
+from . base import BaseFunction
 
 
 class SetRFunction(BaseFunction):

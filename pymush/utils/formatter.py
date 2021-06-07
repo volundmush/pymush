@@ -1,8 +1,10 @@
-from rich.text import Text
-from ..utils.text import tabular_table
 import math
-from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style
 from typing import Optional
+
+from rich.text import Text
+
+from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style
+
 from rich import box, table, columns
 
 

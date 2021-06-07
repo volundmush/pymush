@@ -1,18 +1,21 @@
-from athanor.shared import ConnectionDetails, ConnectionInMessage, ConnectionInMessageType
-from athanor.shared import ConnectionOutMessage, ConnectionOutMessageType, ColorSystem
-from typing import Optional, Set, List, Dict, Union
+import time
+import weakref
+
+from typing import Optional, Set, List
+
 from mudstring.patches.console import MudConsole
 from rich.color import ColorSystem
+
+from athanor.shared import ConnectionDetails, ConnectionInMessage, ConnectionInMessageType
+from athanor.shared import ConnectionOutMessage, ConnectionOutMessageType, ColorSystem
 from athanor_server.conn import Connection as BaseConnection
-import time
+from athanor.utils import lazy_property
+
 from .engine.cmdqueue import QueueEntry
 from .welcome import message as WELCOME
 from .utils import formatter as fmt
 from .selectscreen import render_select_screen
 from .utils.styling import StyleHandler
-import weakref
-from mudstring.patches.text import OLD_TEXT
-from athanor.utils import lazy_property
 
 
 COLOR_MAP = {
@@ -65,9 +68,11 @@ class Connection(BaseConnection):
             cmd: str = ev.data
             if cmd.upper() == "IDLE":
                 return
-            self.last_activity = time.time()
+            now = time.time()
+            self.last_activity = now
             if self.session:
                 entry = QueueEntry.from_ic(self.session, cmd, self)
+                self.session.last_cmd = now
             elif self.user:
                 entry = QueueEntry.from_ooc(self.user, cmd, self)
             else:
@@ -159,6 +164,21 @@ class PromptHandler:
 
     def __init__(self, owner: "GameSession"):
         self.owner = owner
+        self.last_activity = 0.0
+        self.last_prompt = 0.0
+        self.delta = 0.0
+
+    def update(self, delta: float):
+        diff = self.last_activity - self.last_prompt
+        if diff:
+            now = time.time()
+            diff2 = now - self.last_activity
+            if diff2 > self.owner.game.app.config.game_options['prompt_delay']:
+                self.send_prompt()
+                self.last_prompt = now
+
+    def send_prompt(self):
+        pass
 
 
 class GameSession:
@@ -172,9 +192,12 @@ class GameSession:
         self.connections: Set["Connection"] = set()
         self.in_events: List[ConnectionInMessage] = list()
         self.out_events: List[ConnectionOutMessage] = list()
-        self.quelled = True
+        self.admin = False
         self.character.session = self
         self.user.account_sessions.add(self)
+        now = time.time()
+        self.last_cmd = now
+        self.created = now
 
     @lazy_property
     def prompt(self):
@@ -184,8 +207,8 @@ class GameSession:
     def game(self):
         return self.user.game
 
-    def get_alevel(self, ignore_quell=False):
-        if self.quelled and not ignore_quell:
+    def get_alevel(self, ignore_fake=False):
+        if not self.admin and not ignore_fake:
             return min(self.user.admin_level, self.character.admin_level)
         return self.user.admin_level
 
@@ -205,7 +228,7 @@ class GameSession:
                 listener.send(message.relay(self))
 
     def receive_msg(self, message: fmt.FormatList):
-        pass
+        self.prompt.last_activity = time.time()
 
     def on_first_connection(self, connection: "Connection"):
         pass
@@ -237,4 +260,5 @@ class GameSession:
         self.puppet.gather_help(entry, data)
 
     def update(self, delta: float):
-        pass
+        self.prompt.update(delta)
+

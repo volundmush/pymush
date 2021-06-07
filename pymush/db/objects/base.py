@@ -1,77 +1,17 @@
 import sys
-from typing import Union, Set, Optional, List, Dict, Tuple
-from athanor.utils import lazy_property, partial_match
-from pymush.utils import formatter as fmt
-from pymush.utils.styling import StyleHandler
+import weakref
+
 from collections import defaultdict
+from typing import Union, Set, Optional, List, Dict
+
+from athanor.utils import lazy_property, partial_match
+
 from mudstring.patches.text import MudText, OLD_TEXT
 from mudstring.encodings.pennmush import ansi_fun, send_menu
-import weakref
+
 from pymush.db.scripts import ScriptHandler
-from pymush.engine.parser import Parser
-
-
-class Inventory:
-
-    def __init__(self):
-        self.coordinates = defaultdict(set)
-        self.reverse = dict()
-
-    def add(self, obj: "GameObject", coordinates=None):
-        if obj in self.reverse:
-            old_coor = self.reverse[obj]
-            self.coordinates[old_coor].remove(obj)
-            if not len(self.coordinates):
-                del self.coordinates[old_coor]
-        self.coordinates[coordinates].add(obj)
-        self.reverse[obj] = coordinates
-
-    def remove(self, obj: "GameObject"):
-        if obj in self.reverse:
-            old_coor = self.reverse[obj]
-            self.coordinates[old_coor].remove(obj)
-            if not len(self.coordinates):
-                del self.coordinates[old_coor]
-            del self.reverse[obj]
-
-    def all(self):
-        return self.reverse.keys()
-
-
-class ContentsHandler:
-    inventory_class = Inventory
-
-    def __init__(self, owner):
-        self.owner = owner
-        self.inventories = defaultdict(self.inventory_class)
-        self.reverse = dict()
-
-    def add(self, name: str, obj: "GameObject", coordinates=None):
-        destination = self.inventories[name]
-        if obj in self.reverse:
-            rev = self.reverse[obj]
-            if rev == destination:
-                rev.add(obj, coordinates)
-            else:
-                self.reverse[obj].remove(obj)
-                destination.add(obj, coordinates)
-                self.reverse[obj] = destination
-        else:
-            destination.add(obj, coordinates)
-            self.reverse[obj] = destination
-        obj.location = (self.owner, name, coordinates)
-
-    def remove(self, obj: "GameObject"):
-        if obj in self.reverse:
-            rev = self.reverse[obj]
-            rev.remove(obj)
-            del self.reverse[obj]
-            obj.location = None
-
-    def all(self, name=None):
-        if name is not None:
-            return self.inventories[name].all()
-        return self.reverse.keys()
+from pymush.utils import formatter as fmt
+from pymush.utils.styling import StyleHandler
 
 
 class GameObject:
@@ -457,12 +397,12 @@ class GameObject:
     def receive_msg(self, message: fmt.FormatList):
         pass
 
-    def get_alevel(self, ignore_quell=False):
+    def get_alevel(self, ignore_fake=False):
         if self.session:
-            return self.session.get_alevel(ignore_quell=ignore_quell)
+            return self.session.get_alevel(ignore_fake=ignore_fake)
 
         if self.owner:
-            return self.owner.admin_level
+            return self.root_owner.admin_level
         else:
             return self.admin_level
 

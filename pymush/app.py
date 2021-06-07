@@ -1,5 +1,6 @@
 import mudstring
 mudstring.install()
+from typing import Optional, List, Set, Dict, Union
 
 from rich import pretty
 pretty.install()
@@ -8,7 +9,6 @@ from athanor_server.app import Application as BaseApplication
 from .game import GameService
 
 from .config import Config
-from typing import Optional, List, Set, Dict, Union
 
 
 class Application(BaseApplication):

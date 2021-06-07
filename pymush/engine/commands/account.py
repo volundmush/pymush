@@ -1,11 +1,13 @@
 import re
 import datetime
-from . base import MushCommand, CommandException, PythonCommandMatcher, Command
-from rich.text import Text
+
 from athanor.utils import partial_match
+
 from pymush.utils import formatter as fmt
 from pymush.utils.text import duration_format, red_yellow_green, percent_cap
 from pymush.utils import validatorfuncs as valid
+
+from . base import MushCommand, CommandException, PythonCommandMatcher, Command
 
 
 class ACreateCommand(MushCommand):

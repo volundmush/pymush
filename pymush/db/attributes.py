@@ -1,8 +1,10 @@
 import sys
+
 from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Set
-from mudstring.patches.text import MudText, OLD_TEXT
 from enum import IntEnum
+
+from mudstring.patches.text import MudText, OLD_TEXT
 
 
 @dataclass

@@ -1,12 +1,14 @@
-from . base import BaseFunction
-from mudstring.patches.text import MudText
-from pymush.utils.text import truthy, to_number
 import math
-from typing import Union, List, Optional
-from functools import reduce
 import operator
 import numpy
+
+from typing import Union, List, Optional
+from functools import reduce
 from scipy import stats
+
+from mudstring.patches.text import MudText
+from pymush.utils.text import truthy, to_number
+from . base import BaseFunction
 
 
 class _MathFunction(BaseFunction):

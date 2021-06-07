@@ -323,19 +323,10 @@ def find_matching(text: str, start: int, opening: str, closing: str):
 
 
 def find_notspace(text: str, start: int):
-    escaped = False
     i = start
     while i < len(text):
-        if escaped:
-            pass
-        else:
-            c = text[i]
-            if c == '\\':
-                escaped = True
-            elif c == ' ':
-                pass
-            else:
-                return i
+        if text[i] != ' ':
+            return i
         i += 1
     return None
 

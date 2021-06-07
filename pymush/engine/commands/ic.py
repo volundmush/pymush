@@ -1,8 +1,7 @@
-from . base import MushCommand, CommandException, PythonCommandMatcher, BaseCommandMatcher, Command
-from pymush.utils import formatter as fmt
 import re
+
+from . base import MushCommand, CommandException, PythonCommandMatcher, BaseCommandMatcher, Command
 from .shared import PyCommand, HelpCommand
-from pymush.engine.cmdqueue import QueueEntry
 
 
 class OOCCommand(Command):
@@ -29,33 +28,35 @@ class SessionPyCommand(PyCommand):
 
 
 class QuellCommand(PyCommand):
-    name = '@quell'
+    name = '@admin'
     re_match = re.compile(r"^(?P<cmd>@quell)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     @classmethod
     def access(cls, interpreter):
-        print(f"CHECKING QUELL... {interpreter}")
-        print(f"alevel: {interpreter.session.get_alevel(ignore_quell=True)}")
-        return interpreter.session.get_alevel(ignore_quell=True) > 0
+        return interpreter.session.get_alevel(ignore_fake=True) > 0
 
     def execute(self):
-        self.entry.session.quelled = not self.entry.session.quelled
-        if self.entry.session.quelled:
-            self.msg(text="You are now quelled! Admin permissions suppressed.")
+        self.entry.session.admin = not self.entry.session.admin
+        if self.entry.session.admin:
+            self.msg(text="You are now in admin mode! Admin permissions enabled.")
         else:
-            self.msg(text="You are no longer quelled! Admin permissions enabled!")
+            self.msg(text="You are no longer in admin mode. Admin permissions suppressed.")
 
 
-class RunCommand(MushCommand):
-    name = '@run'
-    aliases = ['@ru']
-    help_category = 'System'
+class BuildCommand(PyCommand):
+    name = '@build'
+    re_match = re.compile(r"^(?P<cmd>@build)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
+
+    @classmethod
+    def access(cls, interpreter):
+        return interpreter.session.get_alevel() >= 1
 
     def execute(self):
-        if not self.args:
-            raise CommandException("Nothing to run!")
-        new_entry = QueueEntry.from_script(self.entry.enactor, self.args, self.entry.enactor, self.entry.enactor)
-        self.entry.queue.push(new_entry)
+        self.entry.session.build = not self.entry.session.build
+        if self.entry.session.build:
+            self.msg(text="You are now in building mode! Scripting commands enabled.")
+        else:
+            self.msg(text="You are no longer building! Scripting commands disabled.")
 
 
 class SessionCommandMatcher(PythonCommandMatcher):
@@ -68,4 +69,4 @@ class SessionCommandMatcher(PythonCommandMatcher):
         self.add(SessionPyCommand)
         self.add(QuellCommand)
         self.add(HelpCommand)
-        self.add(RunCommand)
+        self.add(BuildCommand)

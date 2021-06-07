@@ -1,5 +1,7 @@
-from mudstring.patches.text import MudText, OLD_TEXT
 from typing import Union, Iterable, List
+
+from mudstring.patches.text import MudText, OLD_TEXT
+
 from pymush.utils.text import to_number
 from pymush.utils import formatter as fmt
 from pymush.engine.api import BaseApi

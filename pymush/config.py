@@ -57,10 +57,7 @@ class Config(BaseConfig):
 
         m['thing'] = {
             'thing': 'pymush.engine.commands.thing.ThingCommandMatcher',
-            'exit': 'pymush.engine.commands.thing.ThingExitMatcher'
-        }
-
-        m['script'] = {
+            'exit': 'pymush.engine.commands.thing.ThingExitMatcher',
             'script': 'pymush.engine.commands.scripting.ScriptCommandMatcher'
         }
 

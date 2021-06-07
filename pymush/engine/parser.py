@@ -1,10 +1,12 @@
-from .functions.base import NotFound as NotFoundFunction
-from mudstring.patches.text import MudText, OLD_TEXT
 import re
-from typing import Union, Optional, List, Set, Tuple, Dict
+from typing import Union, Optional
 from enum import IntEnum
+
+from mudstring.patches.text import MudText, OLD_TEXT
+
 from pymush.utils.text import find_notspace, find_matching
-import weakref
+
+from .functions.base import NotFound as NotFoundFunction
 
 
 class MushLex(IntEnum):
@@ -279,14 +281,15 @@ class Parser:
         if i is not None:
             while i < len(plain):
                 if escaped:
+                    escaped = False
+                    segment_start = i
                     i += 1
                 else:
                     c = plain[i]
-                    if c == '\\':
-                        if not no_eval:
-                            escaped = True
-                        else:
-                            output += text[i]
+                    if c == '\\' and not no_eval:
+                        escaped = True
+                        if i > segment_start:
+                            output += text[segment_start:i]
                         i += 1
                     elif c == ' ':
                         notspace = find_notspace(plain, i)
@@ -360,7 +363,8 @@ class Parser:
             # hoover up any remaining info to be evaluated...
             if not no_hoover:
                 if i > segment_start:
-                    output += text[segment_start:i]
+                    remaining = text[segment_start:i]
+                    output += remaining
 
         # if we reach down here, then we are doing well and can pop a frame off.
         if not no_eval:

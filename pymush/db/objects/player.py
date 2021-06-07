@@ -1,5 +1,5 @@
-from . base import GameObject
 from typing import Optional
+from . base import GameObject
 
 
 class Player(GameObject):

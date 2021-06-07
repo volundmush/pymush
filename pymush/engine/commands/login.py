@@ -1,13 +1,11 @@
 import re
-import sys
-import time
-import traceback
-from athanor.utils import partial_match
-from . base import Command, MushCommand, CommandException, PythonCommandMatcher
+
 from mudstring.encodings.pennmush import ansi_fun, send_menu
-from . shared import PyCommand, HelpCommand
 
 from pymush.utils import formatter as fmt
+
+from . base import Command, MushCommand, CommandException, PythonCommandMatcher
+from . shared import PyCommand, HelpCommand
 
 
 class _LoginCommand(Command):

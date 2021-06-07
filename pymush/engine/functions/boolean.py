@@ -1,6 +1,8 @@
-from . base import BaseFunction
 from mudstring.patches.text import MudText
+
 from pymush.utils.text import truthy
+
+from . base import BaseFunction
 
 
 class _AbstractBoolFunction(BaseFunction):

@@ -1,18 +1,16 @@
-import re
-import sys
-import time
-import traceback
-from athanor.utils import partial_match
-from .base import Command, MushCommand, CommandException, PythonCommandMatcher
-from pymush.engine.cmdqueue import BreakQueueException, QueueEntryType
-from mudstring.encodings.pennmush import send_menu, ansi_fun
-from pymush.utils import formatter as fmt
-from pymush.utils.text import case_match, truthy
-from pymush.db.attributes import AttributeRequestType, AttributeRequest
 from mudstring.patches.text import MudText
 
+from pymush.engine.cmdqueue import BreakQueueException, QueueEntryType
+from pymush.utils.text import case_match, truthy
 
-class DoListCommand(MushCommand):
+from .base import Command, MushCommand, CommandException, PythonCommandMatcher
+
+
+class _ScriptCommand(MushCommand):
+    help_category = 'Building'
+
+
+class DoListCommand(_ScriptCommand):
     name = '@dolist'
     aliases = ['@dol', '@doli', '@dolis']
     available_switches = ['delimit', 'clearregs', 'inline', 'inplace', 'localize', 'nobreak', 'notify']
@@ -47,7 +45,7 @@ class DoListCommand(MushCommand):
                 self.entry.spawn_action_list(rsargs, dnum=i, dvar=elem)
 
 
-class AssertCommand(MushCommand):
+class AssertCommand(_ScriptCommand):
     name = '@assert'
     aliases = ['@as', '@ass', '@asse', '@asser']
     available_switches = ['queued']
@@ -63,7 +61,7 @@ class AssertCommand(MushCommand):
             raise BreakQueueException(self)
 
 
-class BreakCommand(MushCommand):
+class BreakCommand(_ScriptCommand):
     name = '@break'
     aliases = ['@br', '@bre', '@brea']
     available_switches = ['queued']
@@ -79,12 +77,12 @@ class BreakCommand(MushCommand):
             raise BreakQueueException(self)
 
 
-class TriggerCommand(MushCommand):
+class TriggerCommand(_ScriptCommand):
     name = '@trigger'
     aliases = ['@tr', '@tri', '@trig', '@trigg', '@trigge']
 
 
-class IncludeCommand(MushCommand):
+class IncludeCommand(_ScriptCommand):
     name = '@include'
     aliases = ['@inc', '@incl', '@inclu', '@includ']
     available_switches = ['nobreak']
@@ -106,7 +104,7 @@ class IncludeCommand(MushCommand):
         inter.execute(number_args=number_args, nobreak='nobreak' in self.switches)
 
 
-class SwitchCommand(MushCommand):
+class SwitchCommand(_ScriptCommand):
     name = '@switch'
     aliases = ['@swi', '@swit', '@switc']
     available_switches = ['queued', 'all']
@@ -147,12 +145,11 @@ class SwitchCommand(MushCommand):
                     inter.execute(stext=matcher)
 
 
-class SetCommand(MushCommand):
+class SetCommand(_ScriptCommand):
     name = '@set'
     aliases = ['@se']
 
     def execute(self):
-        print(f"WHAT IS ARGS: {self.args}")
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(name=self.parser.evaluate(lsargs), first_only=True)
@@ -160,9 +157,7 @@ class SetCommand(MushCommand):
             self.executor.msg(err)
             return
         obj = obj[0]
-        print(f"What is rsargs: {rsargs}")
         to_set = self.parser.evaluate(rsargs)
-        print(f"WHAT IS TO_SET: {to_set}")
 
         idx = to_set.find(':')
         if idx == -1:
@@ -180,7 +175,11 @@ class ScriptCommandMatcher(PythonCommandMatcher):
     priority = 10
 
     def access(self, interpreter: "Interpreter"):
-        return interpreter.entry.type == QueueEntryType.SCRIPT
+        t = interpreter.entry.type
+        if t == QueueEntryType.SCRIPT:
+            return True
+        elif t == QueueEntryType.IC:
+            return interpreter.entry.session.build
 
     def at_cmdmatcher_creation(self):
         cmds = [DoListCommand, AssertCommand, BreakCommand, TriggerCommand, IncludeCommand, SwitchCommand,

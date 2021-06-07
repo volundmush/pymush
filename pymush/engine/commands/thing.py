@@ -1,5 +1,5 @@
-from . base import MushCommand, CommandException, PythonCommandMatcher, BaseCommandMatcher, Command
 from pymush.utils import formatter as fmt
+from . base import MushCommand, CommandException, PythonCommandMatcher, BaseCommandMatcher, Command
 
 
 class LookCommand(MushCommand):

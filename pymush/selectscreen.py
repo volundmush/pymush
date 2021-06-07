@@ -1,6 +1,5 @@
-from .utils import formatter as fmt
-from rich.text import Text
 from mudstring.encodings.pennmush import ansi_fun, send_menu, ansify, ansi_fun_style
+from .utils import formatter as fmt
 
 
 def render_select_screen(connection):

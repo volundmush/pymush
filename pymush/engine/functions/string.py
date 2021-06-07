@@ -1,6 +1,7 @@
-from . base import BaseFunction
 from mudstring.patches.text import MudText
 from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style, ansify
+
+from . base import BaseFunction
 
 
 class _AbstractStringFunction(BaseFunction):

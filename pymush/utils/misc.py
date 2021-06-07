@@ -1,5 +1,5 @@
-from inspect import getmembers, getmodule
 import importlib
+from inspect import getmembers, getmodule
 
 
 def callables_from_module(module: str):
