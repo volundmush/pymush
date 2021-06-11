@@ -1,17 +1,17 @@
 from typing import Optional
-from . base import GameObject
+from .base import GameObject
 
 
 class Player(GameObject):
-    type_name = 'PLAYER'
+    type_name = "PLAYER"
     unique_names = True
-    cmd_matchers = ('thing', 'player', 'script')
+    cmd_matchers = ("thing", "player", "script")
     can_be_puppet = True
     ignore_sessionless = True
 
     @property
     def account(self):
-        aid = self.sys_attributes.get('account', None)
+        aid = self.sys_attributes.get("account", None)
         if aid is not None:
             account = self.game.objects.get(aid, None)
             if account:
@@ -20,9 +20,9 @@ class Player(GameObject):
     @account.setter
     def account(self, account: Optional[GameObject] = None):
         if account:
-            self.sys_attributes['account'] = int(account)
+            self.sys_attributes["account"] = int(account)
         else:
-            self.sys_attributes.pop('account', None)
+            self.sys_attributes.pop("account", None)
 
     def generate_identifers_name_for(self, viewer):
         if self.game.app.config.dub_system:

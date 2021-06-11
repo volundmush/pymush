@@ -8,9 +8,8 @@ from collections import OrderedDict, defaultdict
 from typing import Optional, Set, Union
 from enum import IntEnum
 
-from mudstring.patches.text import OLD_TEXT, MudText
-
-from mudstring.patches.traceback import MudTraceback
+from rich.text import Text
+from rich.traceback import Traceback
 
 from athanor_server.conn import Connection
 from pymush.db.objects.base import GameObject
@@ -42,13 +41,12 @@ class CPUTimeExceeded(Exception):
 
 
 class QueueEntry:
-
-    def __init__(self, qtype: int, actions: Union[str, MudText]):
+    def __init__(self, qtype: int, actions: Union[str, Text]):
         self.queue = None
         self.type: QueueEntryType = QueueEntryType(qtype)
         self.user: Optional[GameObject] = None
         self.session: Optional["GameSession"] = None
-        self.actions: MudText = MudText(actions) if isinstance(actions, str) else actions
+        self.actions: Text = Text(actions) if isinstance(actions, str) else actions
         self.connection: Optional[Connection] = None
         self.parsers = weakref.WeakSet()
         self.interpreters = weakref.WeakSet()
@@ -86,7 +84,9 @@ class QueueEntry:
         return entry
 
     @classmethod
-    def from_ooc(cls, user: GameObject, command: str, connection: Optional[Connection] = None) -> "QueueEntry":
+    def from_ooc(
+        cls, user: GameObject, command: str, connection: Optional[Connection] = None
+    ) -> "QueueEntry":
         entry = cls(QueueEntryType.OOC, command)
         entry.user = user
         enactor = weakref.proxy(connection)
@@ -95,7 +95,9 @@ class QueueEntry:
         return entry
 
     @classmethod
-    def from_ic(cls, sess: "GameSession", command: str, connection: Optional[Connection] = None) -> "QueueEntry":
+    def from_ic(
+        cls, sess: "GameSession", command: str, connection: Optional[Connection] = None
+    ) -> "QueueEntry":
         entry = cls(QueueEntryType.IC, command)
         entry.connection = weakref.proxy(connection)
         entry.session = weakref.proxy(sess)
@@ -104,10 +106,17 @@ class QueueEntry:
         return entry
 
     @classmethod
-    def from_script(cls, enactor: GameObject, command: str, executor: Optional[GameObject] = None,
-                    caller: Optional[GameObject] = None) -> "QueueEntry":
+    def from_script(
+        cls,
+        enactor: GameObject,
+        command: str,
+        executor: Optional[GameObject] = None,
+        caller: Optional[GameObject] = None,
+    ) -> "QueueEntry":
         entry = cls(QueueEntryType.SCRIPT, command)
-        entry.start_frame = StackFrame(enactor, executor if executor else enactor, caller if caller else enactor)
+        entry.start_frame = StackFrame(
+            enactor, executor if executor else enactor, caller if caller else enactor
+        )
         entry.split_actions = True
         return entry
 
@@ -115,7 +124,9 @@ class QueueEntry:
         self.start_timer = time.time()
         try:
             parser = Parser(self, self.enactor, self.executor, self.caller)
-            interpreter = Interpreter(self, parser, self.actions, split=self.split_actions)
+            interpreter = Interpreter(
+                self, parser, self.actions, split=self.split_actions
+            )
             try:
                 interpreter.execute()
             except BreakQueueException as brk:
@@ -126,14 +137,18 @@ class QueueEntry:
             trace = None
             if self.session or self.connection:
                 exc_type, exc_value, tb = sys.exc_info()
-                trace = MudTraceback.extract(
-                    exc_type, exc_value, tb, show_locals=False
-                )
-            if trace and self.type == QueueEntryType.IC and self.session.see_tracebacks():
+                trace = Traceback.extract(exc_type, exc_value, tb, show_locals=False)
+            if (
+                trace
+                and self.type == QueueEntryType.IC
+                and self.session.see_tracebacks()
+            ):
                 out = fmt.FormatList(self.session)
                 out.add(fmt.PyException(trace))
                 self.session.send(out)
-            elif trace and self.type == QueueEntryType.OOC and self.user.see_tracebacks():
+            elif (
+                trace and self.type == QueueEntryType.OOC and self.user.see_tracebacks()
+            ):
                 out = fmt.FormatList(self.session)
                 out.add(fmt.PyException(trace))
                 self.session.send(out)
@@ -153,8 +168,7 @@ class QueueEntry:
 
 
 class Interpreter:
-
-    def __init__(self, entry, parser, actions: MudText, split: bool, parent=None):
+    def __init__(self, entry, parser, actions: Text, split: bool, parent=None):
         self.entry = entry
         self.parser = parser
         self.parent = weakref.proxy(parent) if parent else None
@@ -192,8 +206,10 @@ class Interpreter:
     def make_parser(self, **kwargs):
         return self.parser.make_child(**kwargs)
 
-    def make_child(self, actions: MudText, split: bool):
-        return self.__class__(self.entry, self.parser.make_child(), actions, split, self)
+    def make_child(self, actions: Text, split: bool):
+        return self.__class__(
+            self.entry, self.parser.make_child(), actions, split, self
+        )
 
     def get_help(self):
         categories = defaultdict(set)
@@ -205,7 +221,7 @@ class Interpreter:
             self.entry.session.gather_help(self, categories)
         return categories
 
-    def find_cmd(self, action: MudText):
+    def find_cmd(self, action: Text):
         if self.entry.type == QueueEntryType.LOGIN:
             return self.entry.connection.find_login_cmd(self, action)
         elif self.entry.type == QueueEntryType.OOC:
@@ -215,7 +231,7 @@ class Interpreter:
         elif self.entry.type == QueueEntryType.SCRIPT:
             return self.entry.enactor.find_cmd(self, action)
 
-    def action_splitter(self, actions: MudText):
+    def action_splitter(self, actions: Text):
         plain = actions.plain
 
         i = find_notspace(plain, 0)
@@ -231,29 +247,29 @@ class Interpreter:
                 continue
             else:
                 c = plain[i]
-                if c == '\\':
+                if c == "\\":
                     escaped = True
-                elif c == ';' and not (paren_depth or curly_depth or square_depth):
+                elif c == ";" and not (paren_depth or curly_depth or square_depth):
                     yield actions[start_segment:i].squish_spaces()
-                    start_segment = i+1
-                elif c == '(':
+                    start_segment = i + 1
+                elif c == "(":
                     paren_depth += 1
-                elif c == ')' and paren_depth:
+                elif c == ")" and paren_depth:
                     paren_depth -= 1
-                elif c == '{':
+                elif c == "{":
                     curly_depth += 1
-                elif c == '}' and curly_depth:
+                elif c == "}" and curly_depth:
                     curly_depth -= 1
-                elif c == '[':
+                elif c == "[":
                     square_depth += 1
-                elif c == ']' and square_depth:
+                elif c == "]" and square_depth:
                     square_depth -= 1
             i += 1
 
         if i > start_segment:
             yield actions[start_segment:i].squish_spaces()
 
-    def spawn_action_list(self, actions: MudText, **kwargs):
+    def spawn_action_list(self, actions: Text, **kwargs):
         entry = self.entry.__class__(QueueEntryType.SCRIPT)
         frame = self.parser.make_child_frame(**kwargs)
         entry.enactor = frame.enactor
@@ -268,7 +284,7 @@ class Interpreter:
         actions = self.actions
         actions = actions.squish_spaces()
         if self.split_actions:
-            while actions.startswith('{') and actions.endswith('}'):
+            while actions.startswith("{") and actions.endswith("}"):
                 actions = actions[1:-1].squish_spaces()
             action_list = self.action_splitter(actions)
         else:
@@ -301,7 +317,6 @@ class Interpreter:
 
 
 class CmdQueue:
-
     def __init__(self, game):
         self.game = game
         self.queue_data: OrderedDict[int, QueueEntry] = OrderedDict()
@@ -310,9 +325,9 @@ class CmdQueue:
         self.pid: int = 0
         self.current_entry: Optional[QueueEntry] = None
         o = game.app.config.game_options
-        self.function_invocation_limit = o.get('function_invocation_limit', 10000)
-        self.function_recursion_limit = o.get('function_recursion_limit', 3000)
-        self.max_cpu_time = o.get('max_cpu_time', 2.0)
+        self.function_invocation_limit = o.get("function_invocation_limit", 10000)
+        self.function_recursion_limit = o.get("function_recursion_limit", 3000)
+        self.max_cpu_time = o.get("max_cpu_time", 2.0)
 
     def push(self, entry: QueueEntry, priority: int = 100):
         self.pid += 1
@@ -341,7 +356,7 @@ class CmdQueue:
             if self.queue_data:
                 priority, pid = await self.queue.get()
                 try:
-                    if (entry := self.queue_data.pop(pid, None)):
+                    if (entry := self.queue_data.pop(pid, None)) :
                         self.current_entry = entry
                         entry.execute()
                 except Exception as e:

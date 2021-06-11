@@ -7,6 +7,8 @@ def callables_from_module(module: str):
     if not mod:
         return {}
     # make sure to only return callables actually defined in this module (not imports)
-    members = getmembers(mod, predicate=lambda obj: callable(obj) and getmodule(obj) == mod)
-    fixed = {v[0]: v[1] for v in members if not v[0].startswith('_')}
+    members = getmembers(
+        mod, predicate=lambda obj: callable(obj) and getmodule(obj) == mod
+    )
+    fixed = {v[0]: v[1] for v in members if not v[0].startswith("_")}
     return fixed

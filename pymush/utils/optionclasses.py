@@ -1,5 +1,5 @@
 import datetime
-from . validatorfuncs import _TZ_DICT
+from .validatorfuncs import _TZ_DICT
 from . import validatorfuncs
 from rich.text import Text as _Text
 
@@ -20,7 +20,9 @@ class _BaseOption:
     """
 
     def __str__(self):
-        return "<Option {key}: {value}>".format(key=self.key, value=str(self.value)[:10])
+        return "<Option {key}: {value}>".format(
+            key=self.key, value=str(self.value)[:10]
+        )
 
     def __repr__(self):
         return str(self)
@@ -186,7 +188,6 @@ class _BaseOption:
 
 
 class Text(_BaseOption):
-
     def deserialize(self, save_data):
         got_data = str(save_data)
         if not got_data:
@@ -195,7 +196,6 @@ class Text(_BaseOption):
 
 
 class Email(_BaseOption):
-
     def validate(self, value, **kwargs):
         return validatorfuncs.email(value, option_key=self.key, **kwargs)
 
@@ -207,7 +207,6 @@ class Email(_BaseOption):
 
 
 class Boolean(_BaseOption):
-
     def validate(self, value, **kwargs):
         return validatorfuncs.boolean(value, option_key=self.key, **kwargs)
 
@@ -226,7 +225,6 @@ class Boolean(_BaseOption):
 
 
 class Color(_BaseOption):
-
     def validate(self, value, **kwargs):
         return validatorfuncs.color(value, option_key=self.key, **kwargs)
 
@@ -303,7 +301,9 @@ class Datetime(_BaseOption):
     def deserialize(self, save_data):
         if isinstance(save_data, int):
             return datetime.datetime.utcfromtimestamp(save_data)
-        raise ValueError(f"{self.key} expected UTC Datetime in EPOCH format, got '{save_data}'")
+        raise ValueError(
+            f"{self.key} expected UTC Datetime in EPOCH format, got '{save_data}'"
+        )
 
     def serialize(self):
         return int(self.value_storage.strftime("%s"))

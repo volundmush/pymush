@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Set
 from enum import IntEnum
 
-from mudstring.patches.text import MudText, OLD_TEXT
+from rich.text import Text
 
 
 @dataclass
@@ -23,15 +23,15 @@ class Attribute:
 class AttributeManager:
     attr_class = Attribute
 
-    __slots__ = ['owner', 'attributes', 'roots']
+    __slots__ = ["owner", "attributes", "roots"]
 
     def __init__(self, owner):
         self.owner = owner
         self.attributes: Dict[str, Attribute] = dict()
         self.roots: Dict[str, Attribute] = dict()
 
-    def create(self, name: Union[str, OLD_TEXT]) -> Attribute:
-        plain = name.plain if isinstance(name, OLD_TEXT) else name
+    def create(self, name: Union[str, Text]) -> Attribute:
+        plain = name.plain if isinstance(name, Text) else name
         name = plain.upper()
         if not self.valid_name(name):
             raise ValueError("Bad Name for an Attribute")
@@ -41,16 +41,16 @@ class AttributeManager:
         return a
 
     def get(self, name: str) -> Optional[Attribute]:
-        plain = name.plain if isinstance(name, OLD_TEXT) else name
+        plain = name.plain if isinstance(name, Text) else name
         return self.attributes.get(plain.upper(), None)
 
-    def get_or_create(self, name: Union[str, OLD_TEXT]):
-        plain = name.plain if isinstance(name, OLD_TEXT) else name
+    def get_or_create(self, name: Union[str, Text]):
+        plain = name.plain if isinstance(name, Text) else name
         name = plain.upper()
         if not self.valid_name(name):
             raise ValueError("Bad Name for an Attribute")
         s = sys.intern(name.upper())
-        if (a := self.attributes.get(s, None)):
+        if (a := self.attributes.get(s, None)) :
             return a
         a = self.attr_class(manager=self, name=s)
         self.attributes[s] = a
@@ -63,7 +63,7 @@ class AttributeManager:
 @dataclass
 class AttributeValue:
     attribute: Attribute
-    value: MudText
+    value: Text
 
     def can_see(self, request: "AttributeRequest", handler: "AttributeHandler"):
         return True
@@ -75,7 +75,7 @@ class AttributeValue:
         return {"value": self.value.serialize()}
 
 
-EMPTY = MudText("")
+EMPTY = Text("")
 
 
 class AttributeRequestType(IntEnum):
@@ -88,12 +88,12 @@ class AttributeRequestType(IntEnum):
 class AttributeRequest:
     accessor: "GameObject"
     req_type: AttributeRequestType
-    name: Union[str, OLD_TEXT]
+    name: Union[str, Text]
     parser: "Parser"
-    value: Optional[Union[str, OLD_TEXT]] = None
+    value: Optional[Union[str, Text]] = None
     attr_base: Optional[Attribute] = None
     attr: Optional[AttributeValue] = None
-    error: Optional[MudText] = None
+    error: Optional[Text] = None
 
 
 class AttributeHandler:
@@ -116,13 +116,13 @@ class AttributeHandler:
     def serialize(self) -> dict:
         return {attr.name: val.serialize() for attr, val in self.attributes.items()}
 
-    def get(self, name: Union[str, OLD_TEXT]) -> Optional[AttributeValue]:
+    def get(self, name: Union[str, Text]) -> Optional[AttributeValue]:
         attr = self.manager.get(name)
         if attr:
             return self.attributes.get(attr, None)
         return None
 
-    def set_or_create(self, name: Union[str, OLD_TEXT], value: MudText):
+    def set_or_create(self, name: Union[str, Text], value: Text):
         attr = self.manager.get_or_create(name)
         if attr:
             val = self.attributes.get(attr, None)
@@ -135,7 +135,7 @@ class AttributeHandler:
     def wipe(self, pattern):
         pass
 
-    def get_value(self, name: str) -> MudText:
+    def get_value(self, name: str) -> Text:
         attr = self.get(name)
         if attr is None:
             return EMPTY
@@ -145,7 +145,7 @@ class AttributeHandler:
     def api_access(self, request: AttributeRequest) -> bool:
         return True
 
-    def api_can_see(self, accessor: "GameObject", name: Union[str, OLD_TEXT]) -> bool:
+    def api_can_see(self, accessor: "GameObject", name: Union[str, Text]) -> bool:
         return self.api_access(accessor)
 
     def _get_inherit(self, request: AttributeRequest):
@@ -168,7 +168,7 @@ class AttributeHandler:
             request.value = EMPTY
             return
         if not request.attr.can_see(request, self):
-            request.error = MudText("NO PERMISSION TO GET ATTRIBUTE")
+            request.error = Text("NO PERMISSION TO GET ATTRIBUTE")
             return
         request.value = request.attr.value
 
@@ -177,13 +177,13 @@ class AttributeHandler:
             attr_base = self.manager.get_or_create(request.name)
             request.attr_base = attr_base
         except ValueError as err:
-            request.error = MudText(f"#-1 {str(err).upper()}")
+            request.error = Text(f"#-1 {str(err).upper()}")
             return
         attr = self.attributes.get(attr_base, None)
         if attr:
             request.attr = attr
             if not attr.can_set(request, self):
-                request.error = MudText("#-1 NO PERMISSION TO SET ATTRIBUTE")
+                request.error = Text("#-1 NO PERMISSION TO SET ATTRIBUTE")
                 return
             attr.value = request.value
         else:
@@ -193,7 +193,7 @@ class AttributeHandler:
 
     def api_request(self, request: AttributeRequest):
         if not self.api_access(request):
-            request.error = MudText("PERMISSION DENIED FOR ATTRIBUTES")
+            request.error = Text("PERMISSION DENIED FOR ATTRIBUTES")
             return
 
         if request.req_type == AttributeRequestType.SET:
@@ -201,4 +201,4 @@ class AttributeHandler:
         elif request.req_type == AttributeRequestType.GET:
             self.api_get(request)
         else:
-            request.error = MudText("Malformed API request!")
+            request.error = Text("Malformed API request!")

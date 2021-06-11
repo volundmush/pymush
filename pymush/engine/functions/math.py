@@ -6,25 +6,25 @@ from typing import Union, List, Optional
 from functools import reduce
 from scipy import stats
 
-from mudstring.patches.text import MudText
+from rich.text import Text
 from pymush.utils.text import truthy, to_number
-from . base import BaseFunction
+from .base import BaseFunction
 
 
 class _MathFunction(BaseFunction):
-    help_category = 'math'
+    help_category = "math"
 
     def do_execute(self):
         try:
             result = self.math_execute()
         except ValueError as err:
-            return MudText(str(err))
+            return Text(str(err))
         except ZeroDivisionError:
-            return MudText("#-1 DIVISION BY ZERO")
+            return Text("#-1 DIVISION BY ZERO")
         if isinstance(result, float) and int(result) == result:
-            return MudText(str(int(result)))
+            return Text(str(int(result)))
         else:
-            return MudText(str(result))
+            return Text(str(result))
 
     def math_execute(self):
         return 0
@@ -57,7 +57,8 @@ class AbsFunction(_MathFunction):
 
     See Also: sign()
     """
-    name = 'abs'
+
+    name = "abs"
     exact_args = 1
 
     def math_execute(self):
@@ -84,7 +85,8 @@ class AddFunction(_SimpleMathFunction):
 
     See Also: div(), mod(), mul(), sub()
     """
-    name = 'add'
+
+    name = "add"
     func = sum
 
 
@@ -104,7 +106,8 @@ class BoundFunction(_MathFunction):
 
     See Also: between(), fbetween(), fbound(), gt(), lt(), gte(), lte()
     """
-    name = 'bound'
+
+    name = "bound"
     min_args = 2
     max_args = 3
 
@@ -138,7 +141,8 @@ class CeilFunction(_MathFunction):
 
     See Also: div(), floor(), mod(), round(), trunc()
     """
-    name = 'ceil'
+
+    name = "ceil"
     exact_args = 1
 
     def math_execute(self):
@@ -176,7 +180,8 @@ class DivFunction(_SimpleMathFunction):
 
     See Also: add(), fdiv(), mod(), mul(), round(), sub(), trunc()
     """
-    name = 'div'
+
+    name = "div"
     func = _divall
 
 
@@ -202,7 +207,8 @@ class FDivFunction(_SimpleMathFunction):
 
     See Also: add(), fdiv(), mod(), mul(), round(), sub(), trunc()
     """
-    name = 'fdiv'
+
+    name = "fdiv"
     func = _fdivall
 
 
@@ -227,7 +233,8 @@ class FloorFunction(_MathFunction):
 
     See Also: div(), floor(), mod(), round(), trunc()
     """
-    name = 'floor'
+
+    name = "floor"
     exact_args = 1
 
     def math_execute(self):
@@ -264,21 +271,22 @@ class LMathFunction(_MathFunction):
         120
 
     """
-    name = 'lmath'
+
+    name = "lmath"
     min_args = 2
     max_args = 3
 
     ops = {
-        'add': sum,
-        'max': max,
-        'min': min,
-        'sub': _subtract,
-        'mean': numpy.mean,
-        'median': numpy.median,
-        'mode': stats.mode,
-        'mul': numpy.prod,
-        'div': _divall,
-        'fdiv': _fdivall
+        "add": sum,
+        "max": max,
+        "min": min,
+        "sub": _subtract,
+        "mean": numpy.mean,
+        "median": numpy.median,
+        "mode": stats.mode,
+        "mul": numpy.prod,
+        "div": _divall,
+        "fdiv": _fdivall,
     }
 
     def math_execute(self):
@@ -287,42 +295,44 @@ class LMathFunction(_MathFunction):
         if not func:
             raise ValueError(f"#-1 UNSUPPORTED OPERATION ({op})")
 
-        delim = self.parser.evaluate(self.args[2]) if len(self.args) == 3 else MudText(' ')
+        delim = self.parser.evaluate(self.args[2]) if len(self.args) == 3 else Text(" ")
         print(self.args)
-        out_vals = self.list_to_numbers(self.parser.evaluate(self.args[1]).split(delim.plain))
+        out_vals = self.list_to_numbers(
+            self.parser.evaluate(self.args[1]).split(delim.plain)
+        )
         return func(out_vals)
 
 
 class MaxFunction(_SimpleMathFunction):
-    name = 'max'
+    name = "max"
     func = max
 
 
 class MinFunction(_SimpleMathFunction):
-    name = 'min'
+    name = "min"
     func = min
 
 
 class MeanFunction(_SimpleMathFunction):
-    name = 'mean'
+    name = "mean"
     func = numpy.mean
 
 
 class MedianFunction(_SimpleMathFunction):
-    name = 'median'
+    name = "median"
     func = numpy.median
 
 
 class ModeFunction(_SimpleMathFunction):
-    name = 'mode'
+    name = "mode"
     func = stats.mode
 
 
 class MulFunction(_SimpleMathFunction):
-    name = 'mul'
+    name = "mul"
     func = numpy.product
 
 
 class SubFunction(_SimpleMathFunction):
-    name = 'sub'
+    name = "sub"
     func = _subtract

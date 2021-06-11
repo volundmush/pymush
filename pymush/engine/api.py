@@ -1,11 +1,10 @@
 from typing import Union, List, Tuple, Dict
 
-from mudstring.patches.text import MudText
+from rich.text import Text
 from pymush.db.attributes import AttributeRequestType, AttributeRequest
 
 
 class BaseApi:
-
     @property
     def entry(self):
         return self.parser.entry
@@ -32,35 +31,35 @@ class BaseApi:
     def msg(self, text=None, **kwargs):
         self.executor.msg(text=text, **kwargs)
 
-    def split_cmd_args(self, text: Union[str, MudText]):
+    def split_cmd_args(self, text: Union[str, Text]):
         escaped = False
         curly_depth = 0
         i = 0
         start_segment = i
-        plain = text.plain if isinstance(text, MudText) else text
+        plain = text.plain if isinstance(text, Text) else text
 
         while i < len(plain):
             if escaped:
                 escaped = False
             else:
                 c = plain[i]
-                if c == '{':
+                if c == "{":
                     curly_depth += 1
-                elif c == '}' and curly_depth:
+                elif c == "}" and curly_depth:
                     curly_depth -= 1
-                elif c == '\\':
+                elif c == "\\":
                     escaped = True
-                elif c == ',':
+                elif c == ",":
                     yield self.parser.evaluate(text[start_segment:i], no_eval=True)
-                    start_segment = i+1
+                    start_segment = i + 1
             i += 1
 
         if i > start_segment:
             yield self.parser.evaluate(text[start_segment:i], no_eval=True)
 
-    def split_by(self, text: Union[str, MudText], delim: Union[str, MudText] = ' '):
-        plain = text.plain if isinstance(text, MudText) else text
-        delim = delim.plain if isinstance(delim, MudText) else delim
+    def split_by(self, text: Union[str, Text], delim: Union[str, Text] = " "):
+        plain = text.plain if isinstance(text, Text) else text
+        delim = delim.plain if isinstance(delim, Text) else delim
 
         i = self.parser.find_notspace(plain, 0)
         start_segment = i
@@ -85,7 +84,7 @@ class BaseApi:
                 if len(elem):
                     yield elem
 
-    def eqsplit_args(self, text: MudText):
+    def eqsplit_args(self, text: Text):
         escaped = False
 
         plain = text.plain
@@ -97,41 +96,40 @@ class BaseApi:
         while True:
             i += 1
             if i > len(plain) - 1:
-                return text, MudText("")
+                return text, Text("")
             c = plain[i]
 
             if escaped:
                 escaped = False
                 continue
             else:
-                if c == '\\':
+                if c == "\\":
                     escaped = True
-                elif c == '(':
+                elif c == "(":
                     paren_depth += 1
-                elif c == ')' and paren_depth:
+                elif c == ")" and paren_depth:
                     paren_depth -= 1
-                elif c == '[':
+                elif c == "[":
                     square_depth += 1
-                elif c == ']' and square_depth:
+                elif c == "]" and square_depth:
                     square_depth -= 1
-                elif c == '{':
+                elif c == "{":
                     curly_depth += 1
-                elif c == '}' and curly_depth:
+                elif c == "}" and curly_depth:
                     curly_depth -= 1
-                elif c == '=':
+                elif c == "=":
                     if not (paren_depth or square_depth or curly_depth):
-                        lsargs = text[:i].squish_spaces() if i > 0 else MudText("")
-                        rsargs = text[i+1:].squish_spaces()
+                        lsargs = text[:i].squish_spaces() if i > 0 else Text("")
+                        rsargs = text[i + 1 :].squish_spaces()
                         return lsargs, rsargs
 
-
-    def target_obj_attr(self, pattern: MudText, default=None):
+    def target_obj_attr(self, pattern: Text, default=None):
         if default is None:
             default = self.executor
 
         plain = pattern.plain
-        if '/' in plain:
-            obj, attr_name = plain.split('/', 1)
+        if "/" in plain:
+            obj, attr_name = plain.split("/", 1)
             obj = obj.strip()
             if not obj:
                 return None, None, "Must enter an Object to search for!"
@@ -149,13 +147,22 @@ class BaseApi:
         return obj, attr_name, None
 
     def get_attr(self, obj: "GameObject", attr_name):
-        req = AttributeRequest(accessor=self.executor, req_type=AttributeRequestType.GET,
-                               name=attr_name, parser=self.parser)
+        req = AttributeRequest(
+            accessor=self.executor,
+            req_type=AttributeRequestType.GET,
+            name=attr_name,
+            parser=self.parser,
+        )
         obj.attributes.api_request(req)
         return req
 
     def set_attr(self, obj: "GameObject", attr_name, attr_value):
-        req = AttributeRequest(accessor=self.executor, req_type=AttributeRequestType.SET,
-                               name=attr_name, parser=self.parser, value=attr_value)
+        req = AttributeRequest(
+            accessor=self.executor,
+            req_type=AttributeRequestType.SET,
+            name=attr_name,
+            parser=self.parser,
+            value=attr_value,
+        )
         obj.attributes.api_request(req)
         return req

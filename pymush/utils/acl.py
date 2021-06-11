@@ -2,7 +2,9 @@ import re
 from dataclasses import dataclass
 from typing import Dict, List
 
-RE_ACL = re.compile(r"(?s)^(?P<addremove>\+|-)(?P<deny>!)?(?P<prefix>\w+):(?P<name>.*?)(?::(?P<mode>.*?))?(?P<perms>(\/\w+){1,})$")
+RE_ACL = re.compile(
+    r"(?s)^(?P<addremove>\+|-)(?P<deny>!)?(?P<prefix>\w+):(?P<name>.*?)(?::(?P<mode>.*?))?(?P<perms>(\/\w+){1,})$"
+)
 # +!A:Volund:friends/read/boogaloo
 
 
@@ -91,21 +93,26 @@ class ACLHandler:
     def parse_acl(self, entry, enactor=None) -> List[ACLEntry]:
         entries = list()
 
-        for s in entry.split(','):
+        for s in entry.split(","):
             if not (match := RE_ACL.match(s)):
                 print(match)
                 raise ValueError(f"invalid ACL entry: {s}")
             gd = match.groupdict()
-            deny = bool(gd.get('deny', False))
-            remove = True if gd.get('addremove') == '-' else False
+            deny = bool(gd.get("deny", False))
+            remove = True if gd.get("addremove") == "-" else False
             if enactor:
-                identity = enactor.find_identity(prefix=gd.get('prefix'), name=gd.get('name'))
+                identity = enactor.find_identity(
+                    prefix=gd.get("prefix"), name=gd.get("name")
+                )
             else:
-                identity = IdentityDB.objects.filter(db_namespace__db_prefix__iexact=gd.get('prefix'), db_key__iexact=gd.get('name')).first()
+                identity = IdentityDB.objects.filter(
+                    db_namespace__db_prefix__iexact=gd.get("prefix"),
+                    db_key__iexact=gd.get("name"),
+                ).first()
             if not identity:
                 raise ValueError(f"Identity Not found: {s}")
-            mode = gd.get('mode', '')
-            perms = [p.strip().lower() for p in gd.get('perms').split('/') if p]
+            mode = gd.get("mode", "")
+            perms = [p.strip().lower() for p in gd.get("perms").split("/") if p]
             p_dict = self.perm_dict()
             for perm in perms:
                 if perm not in p_dict:
@@ -119,10 +126,16 @@ class ACLHandler:
     def apply_acl(self, entries: List[ACLEntry], report_to=None):
         p_dict = self.perm_dict()
         for entry in entries:
-            mode = entry.mode if entry.mode else ''
-            if not (row := self.obj.acl_entries.filter(identity=entry.identity, mode=mode).first()):
+            mode = entry.mode if entry.mode else ""
+            if not (
+                row := self.obj.acl_entries.filter(
+                    identity=entry.identity, mode=mode
+                ).first()
+            ):
                 row = self.obj.acl_entries.create(identity=entry.identity, mode=mode)
-            bitfield = int(row.allow_permissions if not entry.deny else row.deny_permissions)
+            bitfield = int(
+                row.allow_permissions if not entry.deny else row.deny_permissions
+            )
             if entry.remove:
                 for perm in entry.perms:
                     pval = p_dict.get(perm)

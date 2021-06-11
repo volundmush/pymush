@@ -9,28 +9,42 @@ from rich import box, table, columns
 
 
 class BaseFormatter:
-
     def __init__(self):
         # if this is true, then .send() will ONLY send OOB data if the connection supports OOB - text will not be sent.
         self.prefer_oob = False
 
-    def text(self, formatter, conn: "Connection", user: Optional["User"] = None,
-             character: Optional["GameObject"] = None):
+    def text(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         """
         All formatters must implement text.
         """
         pass
 
-    def oob(self, formatter, conn: "Connection", user: Optional["User"] = None,
-            character: Optional["GameObject"] = None):
+    def oob(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         """
         All formatters must implement data.
         This function returns data that will be sent over OOB to the client.
         """
         pass
 
-    def send(self, formatter, conn: "Connection", user: Optional["User"] = None,
-            character: Optional["GameObject"] = None):
+    def send(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         oob = conn.details.oob
 
         if oob:
@@ -44,24 +58,41 @@ class BaseFormatter:
 class BaseHeader(BaseFormatter):
     mode = "header"
 
-    def __init__(self, text='', fill_character=None, edge_character=None, color=True, color_category='system'):
+    def __init__(
+        self,
+        text="",
+        fill_character=None,
+        edge_character=None,
+        color=True,
+        color_category="system",
+    ):
         if isinstance(text, Text):
             self.contained_text = text.plain
         else:
             self.contained_text = text
         if self.contained_text is None:
-            self.contained_text = ''
+            self.contained_text = ""
         self.fill_character = fill_character
         self.edge_character = edge_character
         self.color = color
         self.color_category = color_category
 
-    def text(self, formatter, conn: "Connection", user: Optional["User"] = None, character: Optional["GameObject"] = None):
+    def text(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         colors = dict()
         styler = formatter.style
         colors["border"] = styler.get(self.color_category, "border_color")
-        colors["headertext"] = styler.get(self.color_category, f"{self.mode}_text_color")
-        colors["headerstar"] = styler.get(self.color_category, f"{self.mode}_star_color")
+        colors["headertext"] = styler.get(
+            self.color_category, f"{self.mode}_text_color"
+        )
+        colors["headerstar"] = styler.get(
+            self.color_category, f"{self.mode}_star_color"
+        )
         width = conn.details.width
         if self.edge_character:
             width -= 2
@@ -69,14 +100,18 @@ class BaseHeader(BaseFormatter):
         contained_text = self.contained_text.strip()
         if contained_text:
             if self.color:
-                header_text = ansi_fun(colors['headertext'], contained_text)
+                header_text = ansi_fun(colors["headertext"], contained_text)
             if self.mode == "header":
-                col_star = ansi_fun(colors['headerstar'], '*')
-                begin_center = ansi_fun(colors['border'], '<') + col_star
-                end_center = col_star + ansi_fun(colors['border'], '>')
-                center_string = begin_center + ' ' + header_text + ' ' + end_center
+                col_star = ansi_fun(colors["headerstar"], "*")
+                begin_center = ansi_fun(colors["border"], "<") + col_star
+                end_center = col_star + ansi_fun(colors["border"], ">")
+                center_string = begin_center + " " + header_text + " " + end_center
             else:
-                center_string = ansi_fun(None, " ") + ansi_fun(colors['headertext'], header_text) + " "
+                center_string = (
+                    ansi_fun(None, " ")
+                    + ansi_fun(colors["headertext"], header_text)
+                    + " "
+                )
         else:
             center_string = ansi_fun(None, "")
 
@@ -121,29 +156,42 @@ class Line(BaseFormatter):
     """
     Just a line of text to display. Nothing fancy about this one!
     """
-    
+
     def __init__(self, text):
         super().__init__()
         self.data = text
-        
-    def text(self, formatter, conn: "Connection", user: Optional["User"] = None,
-             character: Optional["GameObject"] = None):
+
+    def text(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         if self.data:
             conn.print(self.data)
 
 
 class PyDebug(Line):
-
-    def text(self, formatter, conn: "Connection", user: Optional["User"] = None,
-             character: Optional["GameObject"] = None):
+    def text(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         if self.data:
             conn.print_python(self.data)
 
 
 class PyException(Line):
-
-    def text(self, formatter, conn: "Connection", user: Optional["User"] = None,
-             character: Optional["GameObject"] = None):
+    def text(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         conn.print_exception(self.data)
 
 
@@ -152,18 +200,21 @@ class OOB(BaseFormatter):
 
 
 class TabularTable(BaseFormatter):
-
     def __init__(self, word_list, field_width: int = 26, equal: bool = False):
         self.columns = columns.Columns(word_list, width=field_width, equal=equal)
 
-
-    def text(self, formatter, conn: "Connection", user: Optional["User"] = None, character: Optional["GameObject"] = None):
+    def text(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         conn.print(self.columns)
 
 
 class Table(BaseFormatter):
-
-    def __init__(self, title: Optional[str] = None, color_category: str = 'system'):
+    def __init__(self, title: Optional[str] = None, color_category: str = "system"):
         """
         Create an EvTable styled by user preferences.
 
@@ -187,10 +238,18 @@ class Table(BaseFormatter):
     def add_column(self, title: str, **kwargs):
         self.columns.append((title, kwargs))
 
-    def text(self, formatter, conn: "Connection", user: Optional["User"] = None, character: Optional["GameObject"] = None):
+    def text(
+        self,
+        formatter,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         styler = conn.style
         border_style = ansi_fun_style(styler.get(self.color_category, "border_color"))
-        column_name_style = ansi_fun_style(styler.get(self.color_category, "column_names_color"))
+        column_name_style = ansi_fun_style(
+            styler.get(self.color_category, "column_names_color")
+        )
 
         width = conn.details.width
 
@@ -198,11 +257,13 @@ class Table(BaseFormatter):
 
         use_box = None if conn.details.screen_reader else box.ASCII
 
-        out_table = table.Table(box=use_box, border_style=border_style, width=conn.details.width)
+        out_table = table.Table(
+            box=use_box, border_style=border_style, width=conn.details.width
+        )
 
         for col in self.columns:
             options = col[1]
-            options['style'] = column_name_style
+            options["style"] = column_name_style
             out_table.add_column(col[0], **options)
 
         for row in self.rows:
@@ -212,7 +273,7 @@ class Table(BaseFormatter):
 
 
 class FormatList:
-    __slots__ = ["source", "messages", "relay_chain", "kwargs", 'disconnect', 'reason']
+    __slots__ = ["source", "messages", "relay_chain", "kwargs", "disconnect", "reason"]
 
     def __init__(self, source, **kwargs):
         self.source = source
@@ -220,7 +281,7 @@ class FormatList:
         self.relay_chain = list()
         self.kwargs = kwargs
         self.disconnect = False
-        self.reason = ''
+        self.reason = ""
 
     @property
     def style(self):
@@ -233,7 +294,12 @@ class FormatList:
         c.relay_chain.append(obj)
         return c
 
-    def send(self, conn: "Connection", user: Optional["User"] = None, character: Optional["GameObject"] = None):
+    def send(
+        self,
+        conn: "Connection",
+        user: Optional["User"] = None,
+        character: Optional["GameObject"] = None,
+    ):
         """
         Render the messages in this FormatList for obj.
         """

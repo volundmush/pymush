@@ -4,8 +4,8 @@ from mudstring.encodings.pennmush import ansi_fun, send_menu
 
 from pymush.utils import formatter as fmt
 
-from . base import Command, MushCommand, CommandException, PythonCommandMatcher
-from . shared import PyCommand, HelpCommand, QuitCommand
+from .base import Command, MushCommand, CommandException, PythonCommandMatcher
+from .shared import PyCommand, HelpCommand, QuitCommand
 
 
 class _LoginCommand(Command):
@@ -13,9 +13,14 @@ class _LoginCommand(Command):
     Simple bit of logic added for the login commands to deal with syntax like:
     connect "user name" password
     """
-    re_quoted = re.compile(r'^"(?P<name>.+)"(: +(?P<password>.+)?)?', flags=re.IGNORECASE)
-    re_unquoted = re.compile(r'^(?P<name>\S+)(?: +(?P<password>.+)?)?', flags=re.IGNORECASE)
-    help_category = 'Login'
+
+    re_quoted = re.compile(
+        r'^"(?P<name>.+)"(: +(?P<password>.+)?)?', flags=re.IGNORECASE
+    )
+    re_unquoted = re.compile(
+        r"^(?P<name>\S+)(?: +(?P<password>.+)?)?", flags=re.IGNORECASE
+    )
+    help_category = "Login"
 
     def parse_login(self, error):
         mdict = self.match_obj.groupdict()
@@ -41,14 +46,22 @@ class ConnectCommand(_LoginCommand):
     If username contains spaces:
         connect "<user name>" <password>
     """
+
     name = "connect"
     re_match = re.compile(r"^(?P<cmd>connect)(?: +(?P<args>.+))?", flags=re.IGNORECASE)
-    usage = "Usage: " + ansi_fun("hw", "connect <username> <password>") + " or " + ansi_fun("hw", 'connect "<user name>" password')
+    usage = (
+        "Usage: "
+        + ansi_fun("hw", "connect <username> <password>")
+        + " or "
+        + ansi_fun("hw", 'connect "<user name>" password')
+    )
 
     def execute(self):
         name, password = self.parse_login(self.usage)
-        candidates = self.game.type_index['USER']
-        account, error = self.game.search_objects(name, candidates=candidates, exact=True)
+        candidates = self.game.type_index["USER"]
+        account, error = self.game.search_objects(
+            name, candidates=candidates, exact=True
+        )
         if error:
             raise CommandException("Sorry, that was an incorrect username or password.")
         if not account:
@@ -68,30 +81,36 @@ class CreateCommand(_LoginCommand):
     If username contains spaces:
         create "<user name>" <password>
     """
+
     name = "create"
     re_match = re.compile(r"^(?P<cmd>create)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
-    usage = "Usage: " + ansi_fun("hw", 'create <username> <password>') + ' or ' + ansi_fun("hw", 'create "<user name>" <password>')
+    usage = (
+        "Usage: "
+        + ansi_fun("hw", "create <username> <password>")
+        + " or "
+        + ansi_fun("hw", 'create "<user name>" <password>')
+    )
 
     def execute(self):
         name, password = self.parse_login(self.usage)
         pass_hash = self.game.crypt_con.hash(password)
-        account, error = self.game.create_object('USER', name)
+        account, error = self.game.create_object("USER", name)
         if error:
             raise CommandException(error)
         account.password = pass_hash
         # just ignoring password for now.
-        cmd = f'connect "{account.name}" <password>' if ' ' in account.name else f'connect {account.name} <password>'
-        self.msg(text="Account created! You can login with " + ansi_fun('hw', cmd))
-
-
-
+        cmd = (
+            f'connect "{account.name}" <password>'
+            if " " in account.name
+            else f"connect {account.name} <password>"
+        )
+        self.msg(text="Account created! You can login with " + ansi_fun("hw", cmd))
 
 
 class LoginPyCommand(PyCommand):
-
     @classmethod
     def access(cls, interpreter):
-        #if entry.game.objects:
+        # if entry.game.objects:
         #    return False
         return True
 
@@ -113,7 +132,6 @@ class Test(Command):
 
 
 class LoginCommandMatcher(PythonCommandMatcher):
-
     def at_cmdmatcher_creation(self):
         self.add(CreateCommand)
         self.add(ConnectCommand)
@@ -121,4 +139,3 @@ class LoginCommandMatcher(PythonCommandMatcher):
         self.add(Test)
         self.add(HelpCommand)
         self.add(QuitCommand)
-

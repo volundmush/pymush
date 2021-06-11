@@ -1,9 +1,15 @@
 import re
-from mudstring.patches.text import MudText, OLD_TEXT
+from rich.text import Text
 from typing import Optional, Union, List, Tuple, Set, Dict
 
 
-def tabular_table(word_list=None, field_width=26, line_length=78, output_separator=" ", truncate_elements=True):
+def tabular_table(
+    word_list=None,
+    field_width=26,
+    line_length=78,
+    output_separator=" ",
+    truncate_elements=True,
+):
     """
     This function returns a tabulated string composed of a basic list of words.
     """
@@ -31,21 +37,31 @@ def tabular_table(word_list=None, field_width=26, line_length=78, output_separat
                 line += elem
     if line:
         lines.append(line)
-    return AnsiString('\n').join(lines)
+    return AnsiString("\n").join(lines)
 
 
-def dramatic_capitalize(capitalize_string=''):
+def dramatic_capitalize(capitalize_string=""):
     if isinstance(capitalize_string, AnsiString):
         capitalize_string = capitalize_string.clean
-    capitalize_string = re.sub(r"(?i)(?:^|(?<=[_\/\-\|\s()\+]))(?P<name1>[a-z]+)",
-                               lambda find: find.group('name1').capitalize(), capitalize_string.lower())
-    capitalize_string = re.sub(r"(?i)\b(of|the|a|and|in)\b", lambda find: find.group(1).lower(), capitalize_string)
-    capitalize_string = re.sub(r"(?i)(^|(?<=[(\|\/]))(of|the|a|and|in)",
-                               lambda find: find.group(1) + find.group(2).capitalize(), capitalize_string)
+    capitalize_string = re.sub(
+        r"(?i)(?:^|(?<=[_\/\-\|\s()\+]))(?P<name1>[a-z]+)",
+        lambda find: find.group("name1").capitalize(),
+        capitalize_string.lower(),
+    )
+    capitalize_string = re.sub(
+        r"(?i)\b(of|the|a|and|in)\b",
+        lambda find: find.group(1).lower(),
+        capitalize_string,
+    )
+    capitalize_string = re.sub(
+        r"(?i)(^|(?<=[(\|\/]))(of|the|a|and|in)",
+        lambda find: find.group(1) + find.group(2).capitalize(),
+        capitalize_string,
+    )
     return capitalize_string
 
 
-SYSTEM_CHARACTERS = ('/', '|', '=', ',')
+SYSTEM_CHARACTERS = ("/", "|", "=", ",")
 
 
 class Speech:
@@ -60,16 +76,28 @@ class Speech:
     If input = 'blah.', output = 'Character says, "Blah,"'
 
     """
+
     re_speech = re.compile(r'(?s)"(?P<found>.*?)"')
     re_name = re.compile(r"\^\^\^(?P<thing_id>\d+)\:(?P<thing_name>[^^]+)\^\^\^")
-    speech_dict = {':': 1, ';': 2, '^': 3, '"': 0, "'": 0}
+    speech_dict = {":": 1, ";": 2, "^": 3, '"': 0, "'": 0}
 
-    def __init__(self, speaker=None, speech_text=None, alternate_name=None, title=None, mode='ooc', targets=None,
-                 rendered_text=None, action_string="says", controller="character", color_mode='channel'):
+    def __init__(
+        self,
+        speaker=None,
+        speech_text=None,
+        alternate_name=None,
+        title=None,
+        mode="ooc",
+        targets=None,
+        rendered_text=None,
+        action_string="says",
+        controller="character",
+        color_mode="channel",
+    ):
 
         self.controller = athanor.CONTROLLER_MANAGER.get(controller)
         if targets:
-            self.targets = [f'^^^{char.id}:{char.key}^^^' for char in targets]
+            self.targets = [f"^^^{char.id}:{char.key}^^^" for char in targets]
         else:
             self.targets = []
         self.mode = mode
@@ -85,7 +113,7 @@ class Speech:
         else:
             self.display_name = str(speaker)
             self.alternate_name = False
-            self.markup_name = f'^^^{speaker.id}:{speaker.key}^^^'
+            self.markup_name = f"^^^{speaker.id}:{speaker.key}^^^"
 
         speech_first = speech_text[:1]
         if speech_first in self.speech_dict:
@@ -101,11 +129,13 @@ class Speech:
         if rendered_text:
             self.markup_string = rendered_text
         else:
-            self.markup_string = self.controller.reg_names.sub(self.markup_names, self.speech_string)
+            self.markup_string = self.controller.reg_names.sub(
+                self.markup_names, self.speech_string
+            )
 
     def markup_names(self, match):
-        found = match.group('found')
-        return f'^^^{self.controller.name_map[found.upper()].id}:{found}^^^'
+        found = match.group("found")
+        return f"^^^{self.controller.name_map[found.upper()].id}:{found}^^^"
 
     def __str__(self):
         str(self.demarkup())
@@ -119,13 +149,17 @@ class Speech:
         if self.special_format == 0:
             return_string = f'({self.markup_name}){self.alternate_name} {self.action_string}, "{self.markup_string}"'
         elif self.special_format == 1:
-            return_string = f'({self.markup_name}){self.alternate_name} {self.markup_string}'
+            return_string = (
+                f"({self.markup_name}){self.alternate_name} {self.markup_string}"
+            )
         elif self.special_format == 2:
-            return_string = f'({self.markup_name}){self.alternate_name}{self.markup_string}'
+            return_string = (
+                f"({self.markup_name}){self.alternate_name}{self.markup_string}"
+            )
         elif self.special_format == 3:
-            return_string = f'({self.markup_name}){self.markup_string}'
+            return_string = f"({self.markup_name}){self.markup_string}"
         if self.title:
-            return_string = f'{self.title} {return_string}'
+            return_string = f"{self.title} {return_string}"
 
         return self.colorize(return_string, viewer)
 
@@ -134,60 +168,68 @@ class Speech:
             return ANSIString(self.demarkup())
         return_string = None
         if self.special_format == 0:
-            return_string = f'{self.markup_name} {self.action_string}, "{self.markup_string}|n"'
+            return_string = (
+                f'{self.markup_name} {self.action_string}, "{self.markup_string}|n"'
+            )
         elif self.special_format == 1:
-            return_string = f'{self.markup_name} {self.markup_string}'
+            return_string = f"{self.markup_name} {self.markup_string}"
         elif self.special_format == 2:
-            return_string = f'{self.markup_name}{self.markup_string}'
+            return_string = f"{self.markup_name}{self.markup_string}"
         elif self.special_format == 3:
             return_string = self.markup_string
         if self.title:
-            return_string = f'{self.title} {return_string}'
-        if self.mode == 'page' and len(self.targets) > 1:
+            return_string = f"{self.title} {return_string}"
+        if self.mode == "page" and len(self.targets) > 1:
             pref = f'(To {", ".join(self.targets)})'
-            return_string = f'{pref} {return_string}'
+            return_string = f"{pref} {return_string}"
 
         return self.colorize(return_string, viewer)
 
     def log(self):
         return_string = None
         if self.special_format == 0:
-            return_string = f'{self.markup_name} {self.action_string}, "{self.markup_string}|n"'
+            return_string = (
+                f'{self.markup_name} {self.action_string}, "{self.markup_string}|n"'
+            )
         elif self.special_format == 1:
-            return_string = f'{self.markup_name} {self.markup_string}'
+            return_string = f"{self.markup_name} {self.markup_string}"
         elif self.special_format == 2:
-            return_string = f'{self.markup_name}{self.markup_string}'
+            return_string = f"{self.markup_name}{self.markup_string}"
         elif self.special_format == 3:
             return_string = self.markup_string
         if self.title:
-            return_string = f'{self.title} {return_string}'
-        if self.mode == 'page' and len(self.targets) > 1:
+            return_string = f"{self.title} {return_string}"
+        if self.mode == "page" and len(self.targets) > 1:
             pref = f'(To {", ".join(self.targets)}'
-            return_string = f'{pref} {return_string}'
+            return_string = f"{pref} {return_string}"
         return return_string
 
     def demarkup(self):
         return_string = None
         if self.special_format == 0:
-            return_string = f'{self.display_name} {self.action_string}, "{self.speech_string}|n"'
+            return_string = (
+                f'{self.display_name} {self.action_string}, "{self.speech_string}|n"'
+            )
         elif self.special_format == 1:
-            return_string = f'{self.display_name} {self.speech_string}'
+            return_string = f"{self.display_name} {self.speech_string}"
         elif self.special_format == 2:
-            return_string = f'{self.display_name}{self.speech_string}'
+            return_string = f"{self.display_name}{self.speech_string}"
         elif self.special_format == 3:
             return_string = self.speech_string
         if self.title:
-            return_string = f'{self.title} {return_string}'
+            return_string = f"{self.title} {return_string}"
         return ANSIString(return_string)
 
     def colorize(self, message, viewer):
-        viewer = viewer.get_account() if viewer and hasattr(viewer, 'get_account') else None
+        viewer = (
+            viewer.get_account() if viewer and hasattr(viewer, "get_account") else None
+        )
         colors = dict()
         styler = viewer.styler if viewer else athanor.STYLER(None)
-        for op in ("quotes", "speech", "speaker", "self", 'other'):
-            colors[op] = styler.options.get(f"{op}_{self.color_mode}", '')
-            if colors[op] == 'n':
-                colors[op] = ''
+        for op in ("quotes", "speech", "speaker", "self", "other"):
+            colors[op] = styler.options.get(f"{op}_{self.color_mode}", "")
+            if colors[op] == "n":
+                colors[op] = ""
 
         quote_color = colors["quotes"]
         speech_color = colors["speech"]
@@ -211,11 +253,11 @@ class Speech:
             if not (obj := self.controller.id_map.get(thing_id, None)):
                 return thing_name
             custom = viewer.colorizer.get(obj, None)
-            if custom and custom != 'n':
+            if custom and custom != "n":
                 return f"|n|{custom}{thing_name}|n"
             if obj == viewer and colors["self"]:
                 return f"|n|{colors['self']}{thing_name}|n"
-            if obj == self.speaker and colors['speaker']:
+            if obj == self.speaker and colors["speaker"]:
                 return f"|n|{colors['speaker']}{thing_name}|n"
             return thing_name
 
@@ -225,7 +267,7 @@ class Speech:
 
 
 def iter_to_string(iter):
-    return ', '.join(str(i) for i in iter)
+    return ", ".join(str(i) for i in iter)
 
 
 def duration_format(duration: int, width: int = 999999999):
@@ -267,15 +309,15 @@ def duration_format(duration: int, width: int = 999999999):
 
     remaining = width
 
-    out = ''
+    out = ""
     for i, section in enumerate(out_list):
         if i == 0:
             out = section
             remaining -= len(section)
         else:
-            if len(section)+1 <= remaining:
+            if len(section) + 1 <= remaining:
                 out += f" {section}"
-                remaining -= len(section)+1
+                remaining -= len(section) + 1
             else:
                 break
     return out
@@ -310,7 +352,7 @@ def find_matching(text: str, start: int, opening: str, closing: str):
             pass
         else:
             c = text[i]
-            if c == '\\':
+            if c == "\\":
                 escaped = True
             elif c == opening:
                 depth += 1
@@ -325,13 +367,13 @@ def find_matching(text: str, start: int, opening: str, closing: str):
 def find_notspace(text: str, start: int):
     i = start
     while i < len(text):
-        if text[i] != ' ':
+        if text[i] != " ":
             return i
         i += 1
     return None
 
 
-def truthy(test_str: MudText) -> bool:
+def truthy(test_str: Text) -> bool:
     test_str = test_str.squish_spaces()
     if not test_str:
         return False
@@ -346,7 +388,7 @@ def truthy(test_str: MudText) -> bool:
 _RE_NUMERIC = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
 
-def to_number(test_str: MudText) -> Optional[Union[int, float]]:
+def to_number(test_str: Text) -> Optional[Union[int, float]]:
     test_str = test_str.squish_spaces()
 
     if not len(test_str):
@@ -363,15 +405,20 @@ def to_number(test_str: MudText) -> Optional[Union[int, float]]:
         # TODO: Add proper exception value handling
         return None
 
-_RE_COMP = re.compile(r"^(?P<comp>(>|<|>=|<=|==|&|\||~|\^))(?P<num>(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?))$")
+
+_RE_COMP = re.compile(
+    r"^(?P<comp>(>|<|>=|<=|==|&|\||~|\^))(?P<num>(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?))$"
+)
 
 
-def case_match(test_str: MudText, pattern: MudText) -> bool:
+def case_match(test_str: Text, pattern: Text) -> bool:
     test_str = test_str.squish_spaces()
     pattern = pattern.squish_spaces()
 
     # first case - if both are numeric, then just let Python handle it with an eval().
-    if (num := _RE_NUMERIC.match(test_str.plain)) and (comp := _RE_COMP.match(pattern.plain)):
+    if (num := _RE_NUMERIC.match(test_str.plain)) and (
+        comp := _RE_COMP.match(pattern.plain)
+    ):
         return eval(f"{test_str.plain}{pattern.plain}")
     else:
         # nope, we're going to do a string comparison instead. this is case-insensitive.

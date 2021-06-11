@@ -2,7 +2,7 @@ import re
 
 from typing import Union, Optional, Tuple, List
 
-from mudstring.patches.text import MudText
+from rich.text import Text
 
 from pymush.utils import formatter as fmt
 from ..api import BaseApi
@@ -51,7 +51,7 @@ class Command(BaseApi):
             enactor.msg(text="Help is not implemented for this command.")
 
     @classmethod
-    def match(cls, enactor, text: MudText):
+    def match(cls, enactor, text: Text):
         """
         Called by the CommandGroup to determine if this command matches.
         Returns False or a Regex Match object.
@@ -59,7 +59,7 @@ class Command(BaseApi):
         Or any kind of match, really. The parsed match will be returned and re-used by .execute()
         so use whatever you want.
         """
-        if (result := cls.re_match.fullmatch(text.plain)):
+        if (result := cls.re_match.fullmatch(text.plain)) :
             return result
 
     def __init__(self, interpreter, text, match_obj):
@@ -70,7 +70,7 @@ class Command(BaseApi):
         self.match_obj = match_obj
         self.interpreter = interpreter
 
-    def split_args(self, text: Union[str, MudText]):
+    def split_args(self, text: Union[str, Text]):
         return self.split_cmd_args(text)
 
     @property
@@ -88,8 +88,6 @@ class Command(BaseApi):
     def at_post_execute(self):
         pass
 
-
-
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.name}>"
 
@@ -100,8 +98,9 @@ class MushCommand(Command):
     def at_pre_execute(self):
         for sw in self.switches:
             if sw not in self.available_switches:
-                raise CommandException(f"{self.name.upper()} doesn't know switch: /{sw}")
-
+                raise CommandException(
+                    f"{self.name.upper()} doesn't know switch: /{sw}"
+                )
 
     @classmethod
     def match(cls, entry, text):
@@ -112,26 +111,31 @@ class MushCommand(Command):
         Or any kind of match, really. The parsed match will be returned and re-used by .execute()
         so use whatever you want.
         """
-        if not (matcher := getattr(cls, 're_match', None)):
+        if not (matcher := getattr(cls, "re_match", None)):
             names = [cls.name]
-            names.extend(getattr(cls, 'aliases', []))
-            names = '|'.join(names)
+            names.extend(getattr(cls, "aliases", []))
+            names = "|".join(names)
             cls.re_match = re.compile(
                 f"^(?P<cmd>{names})(?P<switches>(/(\w+)?)+)?(?::(?P<mode>\S+)?)?(?:\s+(?P<args>(?P<lhs>[^=]+)(?:=(?P<rhs>.*))?)?)?",
-                flags=re.IGNORECASE)
+                flags=re.IGNORECASE,
+            )
             matcher = cls.re_match
 
-        if (result := matcher.fullmatch(text.plain)):
+        if (result := matcher.fullmatch(text.plain)) :
             return result
 
     def __init__(self, interpreter, text, match_obj):
         super().__init__(interpreter, text, match_obj)
         self.mdict = self.match_obj.groupdict()
-        self.cmd = text[match_obj.start('cmd'):match_obj.end('cmd')]
-        self.args = text[match_obj.start('args'):match_obj.end('args')]
-        switches = '' if self.mdict['switches'] is None else self.mdict['switches']
-        self.mode = self.mdict['mode']
-        self.switches = {sw.strip().lower() for sw in switches.strip('/').split('/')} if switches else set()
+        self.cmd = text[match_obj.start("cmd") : match_obj.end("cmd")]
+        self.args = text[match_obj.start("args") : match_obj.end("args")]
+        switches = "" if self.mdict["switches"] is None else self.mdict["switches"]
+        self.mode = self.mdict["mode"]
+        self.switches = (
+            {sw.strip().lower() for sw in switches.strip("/").split("/")}
+            if switches
+            else set()
+        )
 
 
 class BaseCommandMatcher:
@@ -153,7 +157,7 @@ class BaseCommandMatcher:
         """
         pass
 
-    def match(self, interpreter: "Interpreter", text: MudText):
+    def match(self, interpreter: "Interpreter", text: Text):
         pass
 
     def populate_help(self, interpreter: "Interpreter", data):
@@ -164,7 +168,6 @@ class BaseCommandMatcher:
 
 
 class PythonCommandMatcher(BaseCommandMatcher):
-
     def __init__(self, name):
         self.cmds = set()
         super().__init__(name)
@@ -172,7 +175,7 @@ class PythonCommandMatcher(BaseCommandMatcher):
     def add(self, cmd_class):
         self.cmds.add(cmd_class)
 
-    def match(self, interpreter: "Interpreter", text: MudText):
+    def match(self, interpreter: "Interpreter", text: Text):
         for cmd in self.cmds:
             if cmd.access(interpreter) and (result := cmd.match(interpreter, text)):
                 return cmd(interpreter, text, result)

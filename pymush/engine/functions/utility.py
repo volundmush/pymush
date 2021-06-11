@@ -1,12 +1,12 @@
-from mudstring.patches.text import MudText
+from rich.text import Text
 
 from pymush.utils.text import case_match
 from pymush.db.attributes import AttributeRequest, AttributeRequestType
-from . base import BaseFunction
+from .base import BaseFunction
 
 
 class SetRFunction(BaseFunction):
-    name = 'setr'
+    name = "setr"
     exact_args = 2
 
     def do_execute(self):
@@ -22,24 +22,24 @@ class SetRFunction(BaseFunction):
 
 
 class SetQFunction(SetRFunction):
-    name = 'setq'
+    name = "setq"
 
     def do_execute(self):
         super().do_execute()
-        return MudText("")
+        return Text("")
 
 
 class ListQFunction(BaseFunction):
-    name = 'listq'
+    name = "listq"
     exact_args = 1
 
     def do_execute(self):
         vars = " ".join([str(key) for key in self.parser.frame.vars.keys()])
-        return MudText(vars)
+        return Text(vars)
 
 
 class IfFunction(BaseFunction):
-    name = 'if'
+    name = "if"
     min_args = 1
     max_args = 3
 
@@ -50,22 +50,22 @@ class IfFunction(BaseFunction):
             if len(self.args) == 3:
                 return self.parser.evaluate(self.args[2])
             else:
-                return MudText("")
+                return Text("")
 
 
 class IterFunction(BaseFunction):
-    name = 'iter'
+    name = "iter"
     min_args = 2
     max_args = 4
 
-    def __init__(self, parser, called_as: str, args_data: MudText):
+    def __init__(self, parser, called_as: str, args_data: Text):
         super().__init__(parser, called_as, args_data)
         self.ibreak = False
 
     def do_execute(self):
         out = list()
-        delim = ' '
-        out_delim = MudText(' ')
+        delim = " "
+        out_delim = Text(" ")
         if self.args_count >= 3:
             delim = self.parser.evaluate(self.args[2])
         if self.args_count == 4:
@@ -82,12 +82,12 @@ class IterFunction(BaseFunction):
 
 
 class IBreakFunction(BaseFunction):
-    name = 'ibreak'
+    name = "ibreak"
     exact_args = 1
 
     def do_execute(self):
         if not self.parser.frame.iter:
-            return MudText("#-1 ARGUMENT OUT OF RANGE")
+            return Text("#-1 ARGUMENT OUT OF RANGE")
         arg = self.parser.evaluate(self.args[0])
         if arg:
             num = self.parser.to_number(arg)
@@ -99,19 +99,19 @@ class IBreakFunction(BaseFunction):
         try:
             func = self.parser.frame.iter[num]
             func.ibreak = True
-            return MudText('')
+            return Text("")
         except IndexError:
-            return MudText("#-1 ARGUMENT OUT OF RANGE")
+            return Text("#-1 ARGUMENT OUT OF RANGE")
 
 
 class SwitchFunction(BaseFunction):
-    name = 'switch'
+    name = "switch"
     min_args = 3
 
     def do_execute(self):
         matcher = self.parser.evaluate(self.args[0])
         if len(self.args[1:]) % 2 == 0:
-            default = MudText('')
+            default = Text("")
             args = self.args[1:]
         else:
             default = self.parser.evaluate(self.args[-1], stext=matcher)
@@ -124,13 +124,13 @@ class SwitchFunction(BaseFunction):
 
 
 class UFunction(BaseFunction):
-    name = 'u'
+    name = "u"
     min_args = 1
 
     def do_execute(self):
         obj, attr_name, err = self.target_obj_attr(self.parser.evaluate(self.args[0]))
         if err:
-            return MudText("#-1 UNABLE TO LOCATE OBJECT")
+            return Text("#-1 UNABLE TO LOCATE OBJECT")
 
         req = self.get_attr(obj, attr_name)
         if req.error:
@@ -142,4 +142,6 @@ class UFunction(BaseFunction):
 
         print(f"NUMBER ARGS is: {number_args}")
 
-        return self.parser.evaluate(code, number_args=number_args, executor=obj, caller=self.executor)
+        return self.parser.evaluate(
+            code, number_args=number_args, executor=obj, caller=self.executor
+        )

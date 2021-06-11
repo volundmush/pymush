@@ -1,6 +1,6 @@
-from . base import GameObject
+from .base import GameObject
 
 
 class Exit(GameObject):
-    type_name = 'EXIT'
+    type_name = "EXIT"
     can_have_destination = True

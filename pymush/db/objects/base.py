@@ -6,7 +6,7 @@ from typing import Union, Set, Optional, List, Dict
 
 from athanor.utils import lazy_property, partial_match
 
-from mudstring.patches.text import MudText, OLD_TEXT
+from rich.text import Text
 from mudstring.encodings.pennmush import ansi_fun, send_menu
 
 from pymush.db.scripts import ScriptHandler
@@ -17,7 +17,7 @@ from pymush.utils.styling import StyleHandler
 class GameObject:
     type_name = None
     unique_names = False
-    cmd_matchers = ('script',)
+    cmd_matchers = ("script",)
     is_root_owner = False
     can_be_zone = False
     can_be_destination = False
@@ -34,21 +34,33 @@ class GameObject:
         self._name = sys.intern(name)
         self.aliases: List[str] = list()
         self._parent: Optional[GameObject] = None
-        self._parent_of: weakref.WeakValueDictionary[str, GameObject] = weakref.WeakValueDictionary()
+        self._parent_of: weakref.WeakValueDictionary[
+            str, GameObject
+        ] = weakref.WeakValueDictionary()
         self._zone: Optional[GameObject] = None
-        self._zone_of: weakref.WeakValueDictionary[str, GameObject] = weakref.WeakValueDictionary()
+        self._zone_of: weakref.WeakValueDictionary[
+            str, GameObject
+        ] = weakref.WeakValueDictionary()
         self._owner: Optional[GameObject] = None
-        self._owner_of: weakref.WeakValueDictionary[str, GameObject] = weakref.WeakValueDictionary()
-        self._owner_of_type: Dict[str, weakref.WeakValueDictionary] = defaultdict(weakref.WeakValueDictionary)
+        self._owner_of: weakref.WeakValueDictionary[
+            str, GameObject
+        ] = weakref.WeakValueDictionary()
+        self._owner_of_type: Dict[str, weakref.WeakValueDictionary] = defaultdict(
+            weakref.WeakValueDictionary
+        )
         self.namespaces: Dict[str, weakref.WeakSet] = defaultdict(weakref.WeakSet)
         self._namespace: Optional[GameObject] = None
         self.session: Optional["GameSession"] = None
         self.account_sessions: Set["GameSession"] = weakref.WeakSet()
         self.connections: Set["Connection"] = set()
-        self.attributes = game.app.classes['game']['attributehandler'](self, self.game.attributes)
+        self.attributes = game.app.classes["game"]["attributehandler"](
+            self, self.game.attributes
+        )
         self.sys_attributes = dict()
         self._location: Optional[GameObject] = None
-        self._location_of: weakref.WeakValueDictionary[str, GameObject] = weakref.WeakValueDictionary()
+        self._location_of: weakref.WeakValueDictionary[
+            str, GameObject
+        ] = weakref.WeakValueDictionary()
         self._destination: Optional[GameObject] = None
         self.db_quota: int = 0
         self.cpu_quota: float = 0.0
@@ -69,19 +81,28 @@ class GameObject:
         return self._name
 
     @name.setter
-    def name(self, value: Union[str, OLD_TEXT]):
-        plain = value.plain if isinstance(value, OLD_TEXT) else value
+    def name(self, value: Union[str, Text]):
+        plain = value.plain if isinstance(value, Text) else value
         plain = plain.strip()
-        if not self.game.app.config.regex['basic_name'].match(plain):
+        if not self.game.app.config.regex["basic_name"].match(plain):
             raise ValueError("Name contains invalid characters!")
         if self.unique_names:
-            found, err = self.game.search_objects(plain, self.game.type_index[self.type_name], exact=True, aliases=True)
+            found, err = self.game.search_objects(
+                plain, self.game.type_index[self.type_name], exact=True, aliases=True
+            )
             if found and found != self:
                 raise ValueError("Name conflict within TYPE detected!")
         if self.namespace:
-            found, err = self.game.search_objects(plain, self.namespace.namespaces[self.type_name], exact=True, aliases=True)
+            found, err = self.game.search_objects(
+                plain,
+                self.namespace.namespaces[self.type_name],
+                exact=True,
+                aliases=True,
+            )
             if found and found != self:
-                raise ValueError(f"Name conflict within namespace {self.objid}-{self.type_name} detected!")
+                raise ValueError(
+                    f"Name conflict within namespace {self.objid}-{self.type_name} detected!"
+                )
         self._name = sys.intern(plain)
 
     @property
@@ -89,9 +110,11 @@ class GameObject:
         return self._owner
 
     @owner.setter
-    def owner(self, value: Optional[Union["GameObject", str, OLD_TEXT, int]]):
+    def owner(self, value: Optional[Union["GameObject", str, Text, int]]):
         if self.is_root_owner:
-            raise ValueError(f"A {self.type_name} cannot be owned by anything! It is a root owner!")
+            raise ValueError(
+                f"A {self.type_name} cannot be owned by anything! It is a root owner!"
+            )
         old = self._owner
         if value is not None:
             found = self.game.resolve_object(value)
@@ -106,7 +129,11 @@ class GameObject:
                 del old._owner_of_type[self.type_name][self.objid]
             found._owner_of[self.objid] = self
             found._owner_of_type[self.type_name][self.objid] = self
-            self._owner = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
+            self._owner = (
+                weakref.proxy(found)
+                if not isinstance(found, weakref.ProxyType)
+                else found
+            )
         else:
             if old:
                 del old._owner_of[self.objid]
@@ -129,9 +156,11 @@ class GameObject:
         return self._zone
 
     @zone.setter
-    def zone(self, value: Optional[Union["GameObject", str, OLD_TEXT, int]]):
+    def zone(self, value: Optional[Union["GameObject", str, Text, int]]):
         if self.can_be_zone:
-            raise ValueError(f"{self.objid} cannot be assigned to a Zone as it is a zone candidate!")
+            raise ValueError(
+                f"{self.objid} cannot be assigned to a Zone as it is a zone candidate!"
+            )
         old = self._zone
         if value is not None:
             found = self.game.resolve_object(value)
@@ -144,17 +173,25 @@ class GameObject:
             if found == old:
                 return
             if self.objid in found.zdescendants:
-                raise ValueError(f"That would create a circular relationship! Cannot be your own grandpa!")
+                raise ValueError(
+                    f"That would create a circular relationship! Cannot be your own grandpa!"
+                )
             if old and found != old:
                 del old._zone_of[self.objid]
             found._zone_of[self.objid] = self
-            self._zone = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
+            self._zone = (
+                weakref.proxy(found)
+                if not isinstance(found, weakref.ProxyType)
+                else found
+            )
         else:
             if old:
                 del old._zone_of[self.objid]
             self._zone = None
 
-    def gather_zones(self, max_zones: Optional[int] = None, max_depth: Optional[int] = None):
+    def gather_zones(
+        self, max_zones: Optional[int] = None, max_depth: Optional[int] = None
+    ):
         found = list()
         locations = weakref.WeakSet()
         location = self.location
@@ -177,7 +214,6 @@ class GameObject:
             locations.add(location)
 
         return found
-
 
     @property
     def in_zone(self):
@@ -213,7 +249,7 @@ class GameObject:
         return self._parent
 
     @parent.setter
-    def parent(self, value: Optional[Union["GameObject", str, OLD_TEXT, int]]):
+    def parent(self, value: Optional[Union["GameObject", str, Text, int]]):
         old = self._parent
         if value is not None:
             found = self.game.resolve_object(value)
@@ -222,11 +258,17 @@ class GameObject:
             if found == self:
                 raise ValueError(f"{self.objid} cannot be its own parent!")
             if self.objid in found.descendants:
-                raise ValueError(f"That would create a circular relationship! Cannot be your own grandpa!")
+                raise ValueError(
+                    f"That would create a circular relationship! Cannot be your own grandpa!"
+                )
             if old and found != old:
                 del old._parent_of[self.objid]
             found._parent_of[self.objid] = self
-            self._parent = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
+            self._parent = (
+                weakref.proxy(found)
+                if not isinstance(found, weakref.ProxyType)
+                else found
+            )
         else:
             if old:
                 del old._parent_of[self.objid]
@@ -255,7 +297,7 @@ class GameObject:
         return self._location
 
     @location.setter
-    def location(self, value: Optional[Union["GameObject", str, OLD_TEXT, int]]):
+    def location(self, value: Optional[Union["GameObject", str, Text, int]]):
         if self.no_location:
             raise ValueError(f"{self.objid} cannot have a location!")
         old = self._location
@@ -270,7 +312,11 @@ class GameObject:
             if old and found != old:
                 del old._location_of[self.objid]
             found._location_of[self.objid] = self
-            self._location = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
+            self._location = (
+                weakref.proxy(found)
+                if not isinstance(found, weakref.ProxyType)
+                else found
+            )
         else:
             if old:
                 del old._location_of[self.objid]
@@ -285,7 +331,7 @@ class GameObject:
         return self._namespace
 
     @namespace.setter
-    def namespace(self, value: Optional[Union["GameObject", str, OLD_TEXT, int]]):
+    def namespace(self, value: Optional[Union["GameObject", str, Text, int]]):
         old = self._namespace
         if value is not None:
             found = self.game.resolve_object(value)
@@ -295,15 +341,22 @@ class GameObject:
                 raise ValueError(f"{self.objid} cannot own itself!")
             if found == old:
                 return
-            obj, err = self.game.search_objects(self.name, found.namespaces[self.type_name], exact=True,
-                                                  aliases=True)
+            obj, err = self.game.search_objects(
+                self.name, found.namespaces[self.type_name], exact=True, aliases=True
+            )
             if obj and obj != self:
-                raise ValueError(f"Name conflict within namespace {found.objid}-{self.type_name} detected!")
+                raise ValueError(
+                    f"Name conflict within namespace {found.objid}-{self.type_name} detected!"
+                )
 
             if old and found != old:
                 old.namespaces[self.type_name].remove(self)
             found.namespaces[self.type_name].add(self)
-            self._namespace = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
+            self._namespace = (
+                weakref.proxy(found)
+                if not isinstance(found, weakref.ProxyType)
+                else found
+            )
         else:
             if old:
                 old.namespaces[self.type_name].remove(self)
@@ -314,7 +367,7 @@ class GameObject:
         return self._destination
 
     @destination.setter
-    def destination(self, value: Optional[Union["GameObject", str, OLD_TEXT, int]]):
+    def destination(self, value: Optional[Union["GameObject", str, Text, int]]):
         if not self.can_have_destination:
             raise ValueError(f"{self.objid} cannot have a destination!")
         if value is not None:
@@ -325,7 +378,11 @@ class GameObject:
                 raise ValueError(f"{self.objid} cannot point at itself!")
             if not found.can_be_destination:
                 raise ValueError(f"{found.objid} cannot be a destination!")
-            self._destination = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
+            self._destination = (
+                weakref.proxy(found)
+                if not isinstance(found, weakref.ProxyType)
+                else found
+            )
         else:
             self._destination = None
 
@@ -352,11 +409,10 @@ class GameObject:
             "name": self.name,
             "created": self.created,
             "modified": self.modified,
-            "type_name": self.type_name
+            "type_name": self.type_name,
         }
         if self.parent:
             out["parent"] = self.parent.objid
-
 
         if self.locks:
             out["locks"] = self.locks.serialize()
@@ -391,8 +447,19 @@ class GameObject:
             if listener not in message.relay_chain:
                 listener.send(message.relay(self))
 
-    def access(self, accessor: "GameObject", access_type: str, default=False, no_superuser_bypass=False):
-        return self.locks.check(accessor, access_type, default=default, no_superuser_bypass=no_superuser_bypass)
+    def access(
+        self,
+        accessor: "GameObject",
+        access_type: str,
+        default=False,
+        no_superuser_bypass=False,
+    ):
+        return self.locks.check(
+            accessor,
+            access_type,
+            default=default,
+            no_superuser_bypass=no_superuser_bypass,
+        )
 
     def receive_msg(self, message: fmt.FormatList):
         pass
@@ -418,16 +485,16 @@ class GameObject:
             return self.alevel
 
     def get_dub(self, target):
-        dubs = self.sys_attributes.get('dubs', dict())
+        dubs = self.sys_attributes.get("dubs", dict())
         return dubs.get(target.objid, None)
 
     def set_sub(self, target, value: str):
-        dubs = self.sys_attributes.get('dubs', dict())
+        dubs = self.sys_attributes.get("dubs", dict())
         if value:
             dubs[target.objid] = value
         else:
             dubs.pop(target.objid, None)
-        self.sys_attributes['dubs'] = dubs
+        self.sys_attributes["dubs"] = dubs
 
     def generate_name_for(self, target):
         return target.name
@@ -458,10 +525,25 @@ class GameObject:
             pass
         return whole, words
 
-    def locate_object(self, name: Union[str, MudText], general=True, dbref=True, location=True, contents=True, candidates=None,
-                      use_names=True, use_nicks=True, use_aliases=True, use_dub=True, exact=False, first_only=False,
-                      multi_match=False, filter_visible=True, include_inactive=False):
-        if isinstance(name, MudText):
+    def locate_object(
+        self,
+        name: Union[str, Text],
+        general=True,
+        dbref=True,
+        location=True,
+        contents=True,
+        candidates=None,
+        use_names=True,
+        use_nicks=True,
+        use_aliases=True,
+        use_dub=True,
+        exact=False,
+        first_only=False,
+        multi_match=False,
+        filter_visible=True,
+        include_inactive=False,
+    ):
+        if isinstance(name, Text):
             name = name.plain
         name = name.strip()
         nlower = name.lower()
@@ -474,17 +556,13 @@ class GameObject:
             loc = location
 
         if general:
-            dict_check = {
-                'self': self,
-                'me': self,
-                'here': loc
-            }
+            dict_check = {"self": self, "me": self, "here": loc}
 
-            if (found := dict_check.get(nlower, None)):
+            if (found := dict_check.get(nlower, None)) :
                 out.append(found)
                 return out, None
 
-        if dbref and name.startswith('#'):
+        if dbref and name.startswith("#"):
             found, err = self.game.locate_dbref(name)
             if found:
                 out.append(found)
@@ -493,10 +571,10 @@ class GameObject:
                 return None, err
 
         quant = None
-        if multi_match and '|' in name:
-            quant_str, name = name.split('|', 1)
+        if multi_match and "|" in name:
+            quant_str, name = name.split("|", 1)
             quant_str = quant_str.strip().lower()
-            if quant_str == 'all':
+            if quant_str == "all":
                 quant = -1
             elif quant_str.isdigit():
                 quant = max(int(quant_str), 1)
@@ -527,10 +605,12 @@ class GameObject:
         keywords = defaultdict(list)
         full_names = defaultdict(list)
 
-        simple_words = ('the', 'of', 'an', 'a', 'or', 'and')
+        simple_words = ("the", "of", "an", "a", "or", "and")
 
         for can in total_candidates:
-            whole, words = self.generate_identifiers_for(can, names=use_names, aliases=use_aliases, nicks=use_nicks)
+            whole, words = self.generate_identifiers_for(
+                can, names=use_names, aliases=use_aliases, nicks=use_nicks
+            )
             for word in words:
                 ilower = word.lower()
                 if ilower in simple_words:
@@ -541,7 +621,7 @@ class GameObject:
 
         nlower = name.lower()
         if exact:
-            if (found := full_names.get(nlower, None)):
+            if (found := full_names.get(nlower, None)) :
                 out.extend(found)
         else:
             if quoted:
@@ -577,8 +657,10 @@ class GameObject:
 
     def can_interact_with(self, target: "GameObject"):
         return True
-    
-    def render_appearance(self, interpreter: "Interpreter", viewer: "GameObject", internal=False):
+
+    def render_appearance(
+        self, interpreter: "Interpreter", viewer: "GameObject", internal=False
+    ):
         parser = interpreter.make_parser(executor=self, enactor=viewer)
         out = fmt.FormatList(viewer)
 
@@ -586,63 +668,85 @@ class GameObject:
 
         def format_name(obj, cmd=None):
             name = viewer.get_dub_or_keyphrase_for(obj)
-            display = ansi_fun('hw', name)
+            display = ansi_fun("hw", name)
             if cmd:
                 display = send_menu(display, [(f"{cmd} {name}", cmd)])
             if see_dbrefs:
-                display += f' ({obj.dbref})'
+                display += f" ({obj.dbref})"
             return display
 
-        if (nameformat := self.attributes.get_value('NAMEFORMAT')):
-            result = parser.evaluate(nameformat, executor=self, number_args={0: self.objid, 1: self.name})
+        if (nameformat := self.attributes.get_value("NAMEFORMAT")) :
+            result = parser.evaluate(
+                nameformat, executor=self, number_args={0: self.objid, 1: self.name}
+            )
             out.add(fmt.Line(result))
         else:
             out.add(fmt.Line(format_name(self)))
 
-        if internal and (idesc := self.attributes.get_value('IDESCRIBE')):
+        if internal and (idesc := self.attributes.get_value("IDESCRIBE")):
             idesc_eval = parser.evaluate(idesc, executor=self)
-            if (idescformat := self.attributes.get_value('IDESCFORMAT')):
-                result = parser.evaluate(idescformat, executor=self, number_args=(idesc_eval,))
+            if (idescformat := self.attributes.get_value("IDESCFORMAT")) :
+                result = parser.evaluate(
+                    idescformat, executor=self, number_args=(idesc_eval,)
+                )
                 out.add(fmt.Line(result))
             else:
                 out.add(fmt.Line(idesc_eval))
 
-        elif (desc := self.attributes.get_value('DESCRIBE')):
+        elif (desc := self.attributes.get_value("DESCRIBE")) :
             desc_eval = parser.evaluate(desc, executor=self)
-            if (descformat := self.attributes.get_value('DESCFORMAT')):
-                result = parser.evaluate(descformat, executor=self, number_args=(desc_eval,))
+            if (descformat := self.attributes.get_value("DESCFORMAT")) :
+                result = parser.evaluate(
+                    descformat, executor=self, number_args=(desc_eval,)
+                )
                 out.add(fmt.Line(result))
             else:
                 out.add(fmt.Line(desc_eval))
 
-        if (contents := filter(lambda x: x.active() and viewer.can_perceive(x), self.contents)):
-            contents = sorted(contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x))
+        if (
+            contents := filter(
+                lambda x: x.active() and viewer.can_perceive(x), self.contents
+            )
+        ) :
+            contents = sorted(
+                contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x)
+            )
             if contents:
-                if (conformat := self.attributes.get_value('CONFORMAT')):
-                    contents_objids = ' '.join([con.objid for con in contents])
-                    result = parser.evaluate(conformat, executor=self, number_args=(contents_objids,))
+                if (conformat := self.attributes.get_value("CONFORMAT")) :
+                    contents_objids = " ".join([con.objid for con in contents])
+                    result = parser.evaluate(
+                        conformat, executor=self, number_args=(contents_objids,)
+                    )
                     out.add(fmt.Line(result))
                 else:
                     if viewer in contents:
                         contents.remove(viewer)
                     if contents:
-                        con = [MudText("Contents:")]
+                        con = [Text("Contents:")]
                         for obj in contents:
-                            con.append(f" * " + format_name(obj, 'look'))
-                        out.add(fmt.Line(MudText('\n').join(con)))
+                            con.append(f" * " + format_name(obj, "look"))
+                        out.add(fmt.Line(Text("\n").join(con)))
 
-        if (contents := filter(lambda x: x.active() and viewer.can_perceive(x), self.namespaces['EXIT'])):
-            contents = sorted(contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x))
+        if (
+            contents := filter(
+                lambda x: x.active() and viewer.can_perceive(x), self.namespaces["EXIT"]
+            )
+        ) :
+            contents = sorted(
+                contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x)
+            )
             if contents:
-                if (conformat := self.attributes.get_value('EXITFORMAT')):
-                    contents_objids = ' '.join([con.objid for con in contents])
-                    result = parser.evaluate(conformat, executor=self, number_args=(contents_objids,))
+                if (conformat := self.attributes.get_value("EXITFORMAT")) :
+                    contents_objids = " ".join([con.objid for con in contents])
+                    result = parser.evaluate(
+                        conformat, executor=self, number_args=(contents_objids,)
+                    )
                     out.add(fmt.Line(result))
                 else:
-                    con = [MudText("Exits:")]
+                    con = [Text("Exits:")]
                     for obj in contents:
-                        con.append(f" * " + format_name(obj, 'goto'))
-                    out.add(fmt.Line(MudText('\n').join(con)))
+                        con.append(f" * " + format_name(obj, "goto"))
+                    out.add(fmt.Line(Text("\n").join(con)))
 
         viewer.send(out)
 
@@ -664,7 +768,7 @@ class GameObject:
                     if matcher and matcher.access(entry):
                         matcher.populate_help(entry, data)
 
-    def move_to(self, destination: Optional[Union["GameObject", str, OLD_TEXT, int]]):
+    def move_to(self, destination: Optional[Union["GameObject", str, Text, int]]):
         """
         Placeholder method for eventual version that calls hooks.
         """

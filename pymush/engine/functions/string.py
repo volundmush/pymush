@@ -1,11 +1,11 @@
-from mudstring.patches.text import MudText
+from rich.text import Text
 from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style, ansify
 
-from . base import BaseFunction
+from .base import BaseFunction
 
 
 class _AbstractStringFunction(BaseFunction):
-    help_category = 'string'
+    help_category = "string"
 
 
 class AnsiFunction(_AbstractStringFunction):
@@ -19,7 +19,7 @@ class AnsiFunction(_AbstractStringFunction):
         try:
             style = ansi_fun_style(codes.plain)
         except ValueError as err:
-            return MudText(f"#-1 INVALID ANSI DEFINITION: {err}")
+            return Text(f"#-1 INVALID ANSI DEFINITION: {err}")
         return ansify(style, text)
 
 
@@ -31,7 +31,7 @@ class ScrambleFunction(_AbstractStringFunction):
         if self.args:
             return self.parser.evaluate(self.args[0]).scramble()
         else:
-            return MudText("")
+            return Text("")
 
 
 class ReverseFunction(_AbstractStringFunction):
@@ -42,5 +42,4 @@ class ReverseFunction(_AbstractStringFunction):
         if self.args:
             return self.parser.evaluate(self.args[0]).reverse()
         else:
-            return MudText("")
-
+            return Text("")

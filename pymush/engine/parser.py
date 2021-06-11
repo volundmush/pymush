@@ -2,7 +2,7 @@ import re
 from typing import Union, Optional
 from enum import IntEnum
 
-from mudstring.patches.text import MudText, OLD_TEXT
+from rich.text import Text
 
 from pymush.utils.text import find_notspace, find_matching
 
@@ -52,7 +52,6 @@ class MushSub(IntEnum):
 
 
 class StackFrame:
-
     def __init__(self, enactor, executor, caller):
         self.parser = None
         self.parent = None
@@ -102,48 +101,48 @@ class StackFrame:
             self.ukeys[key.upper()] = key
             self.vars[key] = value
 
-    def eval_sub(self, subtype: MushSub, data) -> MudText:
+    def eval_sub(self, subtype: MushSub, data) -> Text:
         if subtype == MushSub.ENACTOR_DBREF:
             if self.enactor:
-                return MudText(self.enactor.dbref)
+                return Text(self.enactor.dbref)
         elif subtype == MushSub.ENACTOR_NAME:
             if self.enactor:
                 if data:
-                    return MudText(self.enactor.name.capitalize())
+                    return Text(self.enactor.name.capitalize())
                 else:
-                    return MudText(self.enactor.name)
+                    return Text(self.enactor.name)
         elif subtype == MushSub.ENACTOR_OBJID:
             if self.enactor:
-                return MudText(self.enactor.objid)
+                return Text(self.enactor.objid)
 
         elif subtype == MushSub.CALLER_DBREF:
             if self.caller:
-                return MudText(self.caller.dbref)
+                return Text(self.caller.dbref)
 
         elif subtype == MushSub.SPACE:
-            return MudText(' ')
+            return Text(" ")
         elif subtype == MushSub.PERCENT:
-            return MudText("%")
+            return Text("%")
         elif subtype == MushSub.NEWLINE:
-            return MudText('\n')
+            return Text("\n")
         elif subtype == MushSub.TAB:
-            return MudText('\t')
+            return Text("\t")
 
         elif subtype == MushSub.ENACTOR_LOCATION_DBREF:
             if self.enactor:
                 loc = self.enactor.location[0] if self.enactor.location else None
                 if loc:
-                    return MudText(loc.dbref)
+                    return Text(loc.dbref)
 
         elif subtype == MushSub.NUMBER_ARG_VALUE:
             print(f"NUMBER ARG REQUEST: {data}")
             try:
                 return self.number_args[data]
             except KeyError:
-                return MudText("")
+                return Text("")
 
         elif subtype == MushSub.ARG_COUNT:
-            return MudText(str(len(self.number_args)))
+            return Text(str(len(self.number_args)))
 
         elif subtype == MushSub.REGISTER_VALUE:
             resp = self.get_var(data)
@@ -154,37 +153,37 @@ class StackFrame:
             try:
                 val = str(self.dnum[data])
             except IndexError:
-                val = MudText("#-1 ARGUMENT OUT OF RANGE")
+                val = Text("#-1 ARGUMENT OUT OF RANGE")
             return val
 
         elif subtype == MushSub.DTEXT:
             try:
                 val = self.dvars[data]
             except IndexError:
-                val = MudText("#-1 ARGUMENT OUT OF RANGE")
+                val = Text("#-1 ARGUMENT OUT OF RANGE")
             return val
 
         elif subtype == MushSub.INUM:
             try:
                 val = str(self.inum[data])
             except IndexError:
-                val = MudText("#-1 ARGUMENT OUT OF RANGE")
+                val = Text("#-1 ARGUMENT OUT OF RANGE")
             return val
 
         elif subtype == MushSub.ITEXT:
             try:
                 val = self.ivars[data]
             except IndexError:
-                val = MudText("#-1 ARGUMENT OUT OF RANGE")
+                val = Text("#-1 ARGUMENT OUT OF RANGE")
             return val
 
         elif subtype == MushSub.STEXT:
             if self.stext is not None:
                 return self.stext
             else:
-                return MudText("#-1 ARGUMENT OUT OF RANGE")
+                return Text("#-1 ARGUMENT OUT OF RANGE")
 
-        return MudText('')
+        return Text("")
 
 
 class Parser:
@@ -211,12 +210,26 @@ class Parser:
         out = self.__class__(self.entry, None, None, None, frame=frame)
         return out
 
-    def make_child_frame(self, localize=False, enactor=None, executor=None, caller=None, number_args=None,
-                    dnum=None, dvar=None, iter=None, inum=None, ivar=None, stext=None):
+    def make_child_frame(
+        self,
+        localize=False,
+        enactor=None,
+        executor=None,
+        caller=None,
+        number_args=None,
+        dnum=None,
+        dvar=None,
+        iter=None,
+        inum=None,
+        ivar=None,
+        stext=None,
+    ):
         cur_frame = self.frame
-        new_frame = StackFrame(enactor if enactor else self.frame.enactor,
-                               executor if executor else self.frame.executor,
-                               caller if caller else self.frame.caller)
+        new_frame = StackFrame(
+            enactor if enactor else self.frame.enactor,
+            executor if executor else self.frame.executor,
+            caller if caller else self.frame.caller,
+        )
 
         if localize:
             new_frame.localized = True
@@ -251,25 +264,43 @@ class Parser:
             if self.stack:
                 self.frame = self.stack[-1]
 
-    def evaluate(self, text: Union[None, str, OLD_TEXT], localize: bool = False,
-                 called_recursively: bool = False, executor: Optional["GameObject"] = None,
-                 caller: Optional["GameObject"] = None, number_args=None, no_eval=False, iter=None, inum=None,
-                 ivar=None, stext=None):
+    def evaluate(
+        self,
+        text: Union[None, str, Text],
+        localize: bool = False,
+        called_recursively: bool = False,
+        executor: Optional["GameObject"] = None,
+        caller: Optional["GameObject"] = None,
+        number_args=None,
+        no_eval=False,
+        iter=None,
+        inum=None,
+        ivar=None,
+        stext=None,
+    ):
 
         if not text:
-            return MudText("")
+            return Text("")
         if isinstance(text, str):
-            text = MudText(text)
+            text = Text(text)
 
         if not no_eval:
             self.entry.recursion_count += 1
             if self.entry.recursion_count >= self.entry.queue.function_recursion_limit:
-                return MudText("#-1 FUNCTION RECURSION LIMIT EXCEEDED")
+                return Text("#-1 FUNCTION RECURSION LIMIT EXCEEDED")
 
-            self.enter_frame(localize=localize, executor=executor, caller=caller, number_args=number_args,
-                             iter=iter, inum=inum, ivar=ivar, stext=stext)
+            self.enter_frame(
+                localize=localize,
+                executor=executor,
+                caller=caller,
+                number_args=number_args,
+                iter=iter,
+                inum=inum,
+                ivar=ivar,
+                stext=stext,
+            )
 
-        output = MudText("")
+        output = Text("")
 
         plain = text.plain
         escaped = False
@@ -286,18 +317,18 @@ class Parser:
                     i += 1
                 else:
                     c = plain[i]
-                    if c == '\\' and not no_eval:
+                    if c == "\\" and not no_eval:
                         escaped = True
                         if i > segment_start:
                             output += text[segment_start:i]
                         i += 1
-                    elif c == ' ':
+                    elif c == " ":
                         notspace = find_notspace(plain, i)
                         if notspace is not None:
                             if i > segment_start:
                                 output += text[segment_start:i]
                             if output.plain:
-                                output += ' '
+                                output += " "
                             i = notspace
                             segment_start = i
                         else:
@@ -305,44 +336,59 @@ class Parser:
                                 output += text[segment_start:i]
                             no_hoover = True
                             break
-                    elif c == '[' and not no_eval:
+                    elif c == "[" and not no_eval:
                         # This is potentially a recursion. Seek a matching ]
-                        closing = find_matching(plain, i, '[', ']')
+                        closing = find_matching(plain, i, "[", "]")
                         if closing is not None:
                             if i > segment_start:
                                 output += text[segment_start:i]
-                            output += self.evaluate(text[i + 1:closing], called_recursively=True)
+                            output += self.evaluate(
+                                text[i + 1 : closing], called_recursively=True
+                            )
                             segment_start = closing + 1
                             i = closing + 1
                         else:
                             i += 1
-                    elif c == '(' and not no_eval and not first_paren:
+                    elif c == "(" and not no_eval and not first_paren:
                         # this is potentially a function call. Seek a matching )
                         first_paren = True
-                        closing = find_matching(plain, i, '(', ')')
+                        closing = find_matching(plain, i, "(", ")")
                         if closing is not None:
                             if i > segment_start:
                                 output += text[segment_start:i]
                             f_match = self.re_func.fullmatch(output.plain)
                             if f_match:
                                 fdict = f_match.groupdict()
-                                func_name = fdict['func']
-                                bangs = fdict['bangs']
-                                if (func := self.find_function(func_name,
-                                                               default=NotFoundFunction if called_recursively else None)):
+                                func_name = fdict["func"]
+                                bangs = fdict["bangs"]
+                                if (
+                                    func := self.find_function(
+                                        func_name,
+                                        default=NotFoundFunction
+                                        if called_recursively
+                                        else None,
+                                    )
+                                ) :
                                     # hooray we have a function!
                                     self.entry.function_invocation_count += 1
-                                    if self.entry.function_invocation_count >= self.entry.queue.function_invocation_limit:
-                                        output = MudText("#-1 FUNCTION INVOCATION LIMIT EXCEEDED")
+                                    if (
+                                        self.entry.function_invocation_count
+                                        >= self.entry.queue.function_invocation_limit
+                                    ):
+                                        output = Text(
+                                            "#-1 FUNCTION INVOCATION LIMIT EXCEEDED"
+                                        )
                                         break
                                     else:
-                                        ready_fun = func(self, func_name, text[i + 1:closing])
+                                        ready_fun = func(
+                                            self, func_name, text[i + 1 : closing]
+                                        )
                                         output = ready_fun.execute()
                                 segment_start = closing + 1
                                 i = closing + 1
                         else:
                             i += 1
-                    elif c == '%' and not no_eval:
+                    elif c == "%" and not no_eval:
                         # this is potentially a substitution.
                         results = self.valid_sub(plain, i)
                         if results:
@@ -374,39 +420,39 @@ class Parser:
         return output
 
     def valid_sub(self, text: str, start: int):
-        simple = text[start:start + 2]
+        simple = text[start : start + 2]
         sub = None
-        if simple in ('%R', '%r'):
+        if simple in ("%R", "%r"):
             sub = (MushSub.NEWLINE, None)
-        elif simple in ('%T', '%t'):
+        elif simple in ("%T", "%t"):
             sub = (MushSub.TAB, None)
-        elif simple in ('%B', '%b'):
+        elif simple in ("%B", "%b"):
             sub = (MushSub.SPACE, None)
-        elif simple == '%#':
+        elif simple == "%#":
             sub = (MushSub.ENACTOR_DBREF, None)
-        elif simple == '%%':
+        elif simple == "%%":
             sub = (MushSub.PERCENT, None)
-        elif simple == '%:':
+        elif simple == "%:":
             sub = (MushSub.ENACTOR_OBJID, None)
-        elif simple == '%@':
+        elif simple == "%@":
             sub = (MushSub.CALLER_DBREF, None)
-        elif simple == '%?':
+        elif simple == "%?":
             sub = (MushSub.FUNC_INVOKE_AND_DEPTH, None)
-        elif simple == '%+':
+        elif simple == "%+":
             sub = (MushSub.ARG_COUNT, None)
-        elif simple == '%!':
+        elif simple == "%!":
             sub = (MushSub.EXECUTOR_DBREF, None)
-        elif simple in ('%l', '%L'):
+        elif simple in ("%l", "%L"):
             sub = (MushSub.ENACTOR_LOCATION_DBREF, simple[1].isupper())
-        elif simple in ('%n', '%N'):
+        elif simple in ("%n", "%N"):
             sub = (MushSub.ENACTOR_NAME, simple[1].isupper())
-        elif simple in ('%s', '%S'):
+        elif simple in ("%s", "%S"):
             sub = (MushSub.SUBJECTIVE_PRONOUN, simple[1].isupper())
-        elif simple in ('%p', '%P'):
+        elif simple in ("%p", "%P"):
             sub = (MushSub.POSSESSIVE_PRONOUN, simple[1].isupper())
-        elif simple in ('%o', '%O'):
+        elif simple in ("%o", "%O"):
             sub = (MushSub.OBJECTIVE_PRONOUN, simple[1].isupper())
-        elif simple in ('%a', '%A'):
+        elif simple in ("%a", "%A"):
             sub = (MushSub.ABSOLUTE_PRONOUN, simple[1].isupper())
 
         if sub:
@@ -414,35 +460,39 @@ class Parser:
 
         t_start = text[start:]
 
-        if (match := self.re_number_args.fullmatch(t_start)):
+        if (match := self.re_number_args.fullmatch(t_start)) :
             gdict = match.groupdict()
-            number = gdict['number']
+            number = gdict["number"]
             length = len(number)
             number = int(number)
             return 1 + length, (MushSub.NUMBER_ARG_VALUE, number)
 
-        if t_start.lower().startswith('%q'):
+        if t_start.lower().startswith("%q"):
             # this is a q-register of some kind.
             gdict = None
             extra = 2
-            if (match := self.re_q_reg.match(t_start)):
+            if (match := self.re_q_reg.match(t_start)) :
                 gdict = match.groupdict()
-            elif (match := self.re_q_named.match(t_start)):
+            elif (match := self.re_q_named.match(t_start)) :
                 gdict = match.groupdict()
                 extra += 2
             if gdict:
-                varname = gdict['varname']
+                varname = gdict["varname"]
                 varlength = len(varname)
                 if varname.isdigit():
                     varname = int(varname)
                 return extra + varlength, (MushSub.REGISTER_VALUE, varname)
 
-        for code, reg, length in ((MushSub.ITEXT, self.re_itext, 2), (MushSub.DTEXT, self.re_dtext, 2),
-                                  (MushSub.STEXT, self.re_stext, 2), (MushSub.INUM, self.re_inum, 3),
-                                  (MushSub.DNUM, self.re_dnum, 3)):
-            if (match := reg.match(t_start)):
+        for code, reg, length in (
+            (MushSub.ITEXT, self.re_itext, 2),
+            (MushSub.DTEXT, self.re_dtext, 2),
+            (MushSub.STEXT, self.re_stext, 2),
+            (MushSub.INUM, self.re_inum, 3),
+            (MushSub.DNUM, self.re_dnum, 3),
+        ):
+            if (match := reg.match(t_start)) :
                 mdict = match.groupdict()
-                number = mdict['num']
+                number = mdict["num"]
                 extra = len(number)
                 number = int(number)
                 return length + extra, (code, number)

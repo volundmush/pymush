@@ -7,7 +7,7 @@ from collections import OrderedDict, defaultdict
 
 from passlib.context import CryptContext
 
-from mudstring.patches.text import OLD_TEXT
+from rich.text import Text
 
 from athanor.app import Service
 from athanor.utils import import_from_module
@@ -20,20 +20,21 @@ from .utils.misc import callables_from_module
 
 
 class GameService(Service):
-
     def __init__(self, app):
         super().__init__(app)
         self.app.game = self
         self.queue = CmdQueue(self)
         self.objects: OrderedDict[int, GameObject] = OrderedDict()
-        self.db_objects: weakref.WeakValueDictionary[str, GameObject] = weakref.WeakValueDictionary()
-        self.attributes = self.app.classes['game']['attributemanager'](self)
+        self.db_objects: weakref.WeakValueDictionary[
+            str, GameObject
+        ] = weakref.WeakValueDictionary()
+        self.attributes = self.app.classes["game"]["attributemanager"](self)
         self.sessions: OrderedDict[int, "GameSession"] = OrderedDict()
         self.in_events: Optional[asyncio.Queue] = None
         self.out_events: Optional[asyncio.Queue] = None
-        self.obj_classes = self.app.classes['gameobject']
+        self.obj_classes = self.app.classes["gameobject"]
         self.type_index = defaultdict(weakref.WeakSet)
-        self.crypt_con = CryptContext(schemes=['argon2'])
+        self.crypt_con = CryptContext(schemes=["argon2"])
         self.command_matchers = dict()
         self.option_classes = dict()
         self.functions = dict()
@@ -51,13 +52,13 @@ class GameService(Service):
             for matcher_name, matcher_path in v.items():
                 found_class = import_from_module(matcher_path)
                 match_list.append(found_class(matcher_name))
-            match_list.sort(key=lambda x: getattr(x, 'priority', 0))
+            match_list.sort(key=lambda x: getattr(x, "priority", 0))
             self.command_matchers[k] = match_list
 
-        for path in self.app.config.gather_modules['optionclasses']:
+        for path in self.app.config.gather_modules["optionclasses"]:
             self.option_classes.update(callables_from_module(path))
 
-        for path in self.app.config.gather_modules['functions']:
+        for path in self.app.config.gather_modules["functions"]:
             try:
                 funcs = callables_from_module(path)
                 results = dict()
@@ -81,12 +82,12 @@ class GameService(Service):
         return out
 
     def locate_dbref(self, text):
-        if not text.startswith('#'):
+        if not text.startswith("#"):
             return None, "invalid dbref or objid format! Must start with a #"
         text = text[1:]
         objid_str = None
-        if ':' in text:
-            dbid_str, objid_str = text.split(':', 1)
+        if ":" in text:
+            dbid_str, objid_str = text.split(":", 1)
         else:
             dbid_str = text
 
@@ -113,16 +114,23 @@ class GameService(Service):
         else:
             return None, "Invalid dbref!"
 
-    def create_object(self, type_name: str, name: str, dbid: Optional[int] = None,
-                      location: Union[GameObject, str, OLD_TEXT, int] = None, no_location=False,
-                      namespace: Optional[GameObject] = None, owner: Optional[GameObject] = None):
+    def create_object(
+        self,
+        type_name: str,
+        name: str,
+        dbid: Optional[int] = None,
+        location: Union[GameObject, str, Text, int] = None,
+        no_location=False,
+        namespace: Optional[GameObject] = None,
+        owner: Optional[GameObject] = None,
+    ):
 
         name = name.strip()
         type_name = type_name.upper().strip()
         if not name:
             return None, f"Objects must have a name!"
 
-        if not self.app.config.regex['basic_name'].match(name):
+        if not self.app.config.regex["basic_name"].match(name):
             return None, "Name contains invalid characters!"
 
         if dbid is not None:
@@ -138,9 +146,14 @@ class GameService(Service):
         if namespace:
             namespace = self.resolve_object(namespace)
         if namespace:
-            found, err = self.search_objects(name, namespace.namespaces[type_name], exact=True, aliases=True)
+            found, err = self.search_objects(
+                name, namespace.namespaces[type_name], exact=True, aliases=True
+            )
             if found:
-                return None, f"That name is already in use by another {type_name} managed by {namespace.objid}!"
+                return (
+                    None,
+                    f"That name is already in use by another {type_name} managed by {namespace.objid}!",
+                )
 
         obj_class = self.obj_classes.get(type_name, None)
         if not obj_class:
@@ -156,7 +169,9 @@ class GameService(Service):
                 raise ValueError("All non-root_owner objects must have an Owner!")
 
         if obj_class.unique_names:
-            found, err = self.search_objects(name, self.type_index[type_name], exact=True, aliases=True)
+            found, err = self.search_objects(
+                name, self.type_index[type_name], exact=True, aliases=True
+            )
             if found:
                 return None, f"That name is already in use by another {type_name}!"
 
@@ -167,7 +182,9 @@ class GameService(Service):
                 orig = location
                 location = self.resolve_object(location)
                 if not location:
-                    raise ValueError(f"{orig} cannot be resolved to a GameObject for location!")
+                    raise ValueError(
+                        f"{orig} cannot be resolved to a GameObject for location!"
+                    )
             else:
                 location = self.get_start_location(type_name)
 
@@ -189,7 +206,9 @@ class GameService(Service):
         self.db_objects[obj.dbref] = obj
         self.db_objects[obj.objid] = obj
 
-    def search_objects(self, name, candidates: Optional[Iterable] = None, exact=False, aliases=False):
+    def search_objects(
+        self, name, candidates: Optional[Iterable] = None, exact=False, aliases=False
+    ):
         if candidates is None:
             candidates = self.objects.values()
         name_lower = name.strip().lower()
@@ -198,7 +217,7 @@ class GameService(Service):
                 if name_lower == obj.name.lower():
                     return obj, None
         else:
-            if (found := partial_match(name, candidates, key=lambda x: x.name)):
+            if (found := partial_match(name, candidates, key=lambda x: x.name)) :
                 return found, None
         return None, f"Sorry, nothing matches: {name}"
 
@@ -206,7 +225,7 @@ class GameService(Service):
         if not (sess := self.sessions.get(character.dbid, None)):
             if len(connection.user.account_sessions) > connection.user.max_sessions():
                 return "Too many Sessions already in play for this User Account!"
-            sess = self.app.classes['game']['gamesession'](connection.user, character)
+            sess = self.app.classes["game"]["gamesession"](connection.user, character)
             self.sessions[character.dbid] = sess
             connection.user.account_sessions.add(sess)
         connection.join_session(sess)
@@ -217,21 +236,23 @@ class GameService(Service):
 
     def get_start_location(self, type_name: str):
         o = self.app.config.game_options
-        type_start = o['type_start'].get(type_name, o.get('default_start', 0))
+        type_start = o["type_start"].get(type_name, o.get("default_start", 0))
         return self.resolve_object(type_start)
 
-    def resolve_object(self, check: Union["GameObject", str, OLD_TEXT, int]) -> Optional[GameObject]:
+    def resolve_object(
+        self, check: Union["GameObject", str, Text, int]
+    ) -> Optional[GameObject]:
         if isinstance(check, GameObject):
             return check
         elif isinstance(check, int):
             return self.objects.get(check, None)
         elif isinstance(check, str):
             return self.db_objects.get(check, None)
-        elif isinstance(check, OLD_TEXT):
+        elif isinstance(check, Text):
             check = check.plain
             return self.db_objects.get(check, None)
 
     def alevel_of(self, type_name: str):
-        if type_name in self.app.config.game_options['type_alevel']:
-            return self.app.config.game_options['type_alevel'][type_name]
-        return self.app.config.game_options['default_alevel']
+        if type_name in self.app.config.game_options["type_alevel"]:
+            return self.app.config.game_options["type_alevel"][type_name]
+        return self.app.config.game_options["default_alevel"]

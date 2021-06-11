@@ -3,13 +3,17 @@ import weakref
 
 from typing import Optional, Set, List
 
-from mudstring.patches.console import MudConsole
+from rich.console import Console
 from rich.color import ColorSystem
 from rich.console import _null_highlighter
-from rich.highlighter import ReprHighlighter
-from mudstring.patches.traceback import MudTraceback
+from rich.traceback import Traceback
+from rich.box import ASCII
 
-from athanor.shared import ConnectionDetails, ConnectionInMessage, ConnectionInMessageType
+from athanor.shared import (
+    ConnectionDetails,
+    ConnectionInMessage,
+    ConnectionInMessageType,
+)
 from athanor.shared import ConnectionOutMessage, ConnectionOutMessageType, ColorSystem
 from athanor_server.conn import Connection as BaseConnection
 from athanor.utils import lazy_property
@@ -25,13 +29,13 @@ COLOR_MAP = {
     ColorSystem.STANDARD: "standard",
     ColorSystem.EIGHT_BIT: "256",
     ColorSystem.TRUECOLOR: "truecolor",
-    ColorSystem.WINDOWS: "windows"
+    ColorSystem.WINDOWS: "windows",
 }
 
 
 class Connection(BaseConnection):
-    login_matchers = ('login',)
-    select_matchers = ('ooc',)
+    login_matchers = ("login",)
+    select_matchers = ("ooc",)
 
     def __init__(self, service: "ConnectionService", details: ConnectionDetails):
         super().__init__(service, details)
@@ -39,8 +43,12 @@ class Connection(BaseConnection):
         self.last_activity = self.connected
         self.user: Optional["GameObject"] = None
         self.session: Optional["GameSession"] = None
-        self.console = MudConsole(color_system=COLOR_MAP[details.color] if details.color else None,
-                                  mxp=details.mxp_active, file=self, width=details.width)
+        self.console = Console(
+            color_system=COLOR_MAP[details.color] if details.color else None,
+            mxp=details.mxp_active,
+            file=self,
+            width=details.width,
+        )
         self._repr_highlighter = self.console.highlighter
         self.console.highlighter = _null_highlighter
         self.menu = None
@@ -60,11 +68,13 @@ class Connection(BaseConnection):
         pass
 
     def write(self, b: str):
-        self.out_gamedata.append(('line', (b,), dict()))
+        self.out_gamedata.append(("line", (b,), dict()))
 
     def on_update(self, details: ConnectionDetails):
         self.details = details
-        self.console._color_system = ColorSystem(int(details.color)) if details.color else None
+        self.console._color_system = (
+            ColorSystem(int(details.color)) if details.color else None
+        )
         self.console.mxp = details.mxp_active
         self.console._width = details.width
 
@@ -72,7 +82,7 @@ class Connection(BaseConnection):
         if ev.msg_type == ConnectionInMessageType.GAMEDATA:
             now = time.time()
             for cmd, args, kwargs in ev.data:
-                if cmd in ('text', 'line'):
+                if cmd in ("text", "line"):
                     command = args[0]
                     if command.upper() == "IDLE":
                         return
@@ -90,7 +100,7 @@ class Connection(BaseConnection):
         self.console.print(*args, highlight=False, **kwargs)
 
     def print_exception(self, trace):
-        tb = MudTraceback(trace=trace, width=self.console.width)
+        tb = Traceback(trace=trace, width=self.console.width, box=ASCII)
         self.console.print(tb)
 
     def print_python(self, *args, **kwargs):
@@ -167,7 +177,7 @@ class Connection(BaseConnection):
         self.on_join_session(session)
 
     def on_join_session(self, session: "GameSession"):
-        entry = QueueEntry.from_ic(self.session, 'look', self)
+        entry = QueueEntry.from_ic(self.session, "look", self)
         self.game.queue.push(entry)
 
     def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
@@ -200,7 +210,6 @@ class Connection(BaseConnection):
 
 
 class PromptHandler:
-
     def __init__(self, owner: "GameSession"):
         self.owner = owner
         self.last_activity = 0.0
@@ -211,7 +220,7 @@ class PromptHandler:
         diff = self.last_activity - self.last_prompt
         if diff:
             diff2 = now - self.last_activity
-            if diff2 > self.owner.game.app.config.game_options['prompt_delay']:
+            if diff2 > self.owner.game.app.config.game_options["prompt_delay"]:
                 self.send_prompt()
                 self.last_prompt = now
 
@@ -220,7 +229,7 @@ class PromptHandler:
 
 
 class GameSession:
-    session_matchers = ('ic',)
+    session_matchers = ("ic",)
 
     def __init__(self, user: "GameObject", character: "GameObject"):
         self.user: "GameObject" = user
@@ -240,7 +249,7 @@ class GameSession:
 
     @lazy_property
     def prompt(self):
-        return self.game.app.classes['game']['prompthandler'](self)
+        return self.game.app.classes["game"]["prompthandler"](self)
 
     @property
     def game(self):

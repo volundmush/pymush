@@ -8,24 +8,24 @@ from mudstring.encodings.pennmush import send_menu, ansi_fun
 from athanor.utils import partial_match
 
 from pymush.utils import formatter as fmt
-from mudstring.patches.traceback import MudTraceback
+from rich.traceback import Traceback
 
-from . base import Command, MushCommand, CommandException, PythonCommandMatcher
+from .base import Command, MushCommand, CommandException, PythonCommandMatcher
 
 
 class PyCommand(Command):
-    name = '@py'
+    name = "@py"
     re_match = re.compile(r"^(?P<cmd>@py)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
-    help_category = 'System'
+    help_category = "System"
 
     def available_vars(self):
         return {
-            'entry': self.entry,
-            'parser': self.parser,
-            'enactor': self.entry.enactor,
-            'connection': self.entry.connection,
+            "entry": self.entry,
+            "parser": self.parser,
+            "enactor": self.entry.enactor,
+            "connection": self.entry.connection,
             "game": self.game,
-            "app": self.game.app
+            "app": self.game.app,
         }
 
     @classmethod
@@ -46,8 +46,8 @@ class PyCommand(Command):
         if not args:
             raise CommandException("@py requires arguments!")
         out = fmt.FormatList(self.enactor)
-        out.add(fmt.PyDebug(f">>> {repr(args)}"))
-        duration = ''
+        out.add(fmt.Line(f">>> {args}"))
+        duration = ""
         ret = None
 
         try:
@@ -58,12 +58,7 @@ class PyCommand(Command):
             sys.stdout = self
             sys.stderr = self
 
-            mode = "eval"
-            try:
-                pycode_compiled = compile(args, "", mode)
-            except Exception:
-                mode = "exec"
-                pycode_compiled = compile(args, "", mode)
+            pycode_compiled = compile(args, "", "eval")
 
             measure_time = True
 
@@ -76,9 +71,7 @@ class PyCommand(Command):
                 ret = eval(pycode_compiled, {}, self.available_vars())
         except Exception:
             exc_type, exc_value, tb = sys.exc_info()
-            trace = MudTraceback.extract(
-                exc_type, exc_value, tb, show_locals=False
-            )
+            trace = Traceback.extract(exc_type, exc_value, tb, show_locals=False)
             out.add(fmt.PyException(trace))
         finally:
             # return to old stdout
@@ -95,6 +88,7 @@ class HelpCommand(Command):
     """
     This is the help command.
     """
+
     name = "help"
     re_match = re.compile(r"^(?P<cmd>help)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
@@ -102,7 +96,7 @@ class HelpCommand(Command):
         categories = self.interpreter.get_help()
 
         gdict = self.match_obj.groupdict()
-        args = gdict.get('args', None)
+        args = gdict.get("args", None)
 
         if not args:
             self.display_help(categories)
@@ -117,7 +111,17 @@ class HelpCommand(Command):
             cat = data[cat_key]
             out.add(fmt.Subheader(cat_key))
             cmds = sorted([cmd for cmd in cat], key=lambda x: x.name)
-            out.add(fmt.TabularTable([send_menu(cmd.name, commands=[(f'help {cmd.name}', f"help {cmd.name}")]) for cmd in cmds]))
+            out.add(
+                fmt.TabularTable(
+                    [
+                        send_menu(
+                            cmd.name,
+                            commands=[(f"help {cmd.name}", f"help {cmd.name}")],
+                        )
+                        for cmd in cmds
+                    ]
+                )
+            )
         out.add(fmt.Footer("help <command> for further help"))
         self.entry.enactor.send(out)
 
@@ -135,13 +139,14 @@ class QuitCommand(Command):
     """
     Disconnects this connection from the game.
     """
-    name = 'QUIT'
+
+    name = "QUIT"
     re_match = re.compile(r"^(?P<cmd>QUIT)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
-    help_category = 'System'
+    help_category = "System"
 
     def execute(self):
         out = fmt.FormatList(self.enactor)
         out.add(fmt.Line("See you again!"))
-        out.reason = 'quit'
+        out.reason = "quit"
         self.send(out)
         self.enactor.terminate()

@@ -1,22 +1,22 @@
-from mudstring.patches.text import MudText
+from rich.text import Text
 
 from pymush.utils.text import truthy
 
-from . base import BaseFunction
+from .base import BaseFunction
 
 
 class _AbstractBoolFunction(BaseFunction):
-    help_category = 'boolean'
+    help_category = "boolean"
 
     def do_execute(self):
-        return MudText("1") if self.math_execute() else MudText("0")
+        return Text("1") if self.math_execute() else Text("0")
 
     def math_execute(self):
         return False
 
 
 class TFunction(_AbstractBoolFunction):
-    name = 't'
+    name = "t"
     exact_args = 1
 
     def math_execute(self):
@@ -24,22 +24,22 @@ class TFunction(_AbstractBoolFunction):
 
 
 class NotFunction(TFunction):
-    name = 'not'
+    name = "not"
 
     def math_execute(self):
         return not super().math_execute()
 
 
 class AndFunction(_AbstractBoolFunction):
-    name = 'and'
+    name = "and"
     min_args = 2
-    
+
     def math_execute(self):
         return all([truthy(self.parser.evaluate(arg)) for arg in self.args])
 
 
 class CAndFunction(_AbstractBoolFunction):
-    name = 'cand'
+    name = "cand"
     min_args = 2
 
     def math_execute(self):
@@ -52,7 +52,7 @@ class CAndFunction(_AbstractBoolFunction):
 
 
 class OrFunction(_AbstractBoolFunction):
-    name = 'or'
+    name = "or"
     min_args = 2
 
     def math_execute(self):
@@ -60,7 +60,7 @@ class OrFunction(_AbstractBoolFunction):
 
 
 class COrFunction(_AbstractBoolFunction):
-    name = 'cor'
+    name = "cor"
     min_args = 2
 
     def math_execute(self):

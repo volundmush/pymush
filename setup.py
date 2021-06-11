@@ -21,6 +21,7 @@ def get_requirements():
             reqs.append(line)
     return reqs
 
+
 def get_scripts():
     """
     Determine which executable scripts should be added. For Windows,
@@ -37,8 +38,9 @@ def get_scripts():
 
 
 from os import path
+
 this_directory = path.abspath(path.dirname(__file__))
-with open(path.join(this_directory, 'README.md'), encoding='utf-8') as f:
+with open(path.join(this_directory, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 # setup the package
@@ -51,7 +53,7 @@ setup(
     description="",
     license="???",
     long_description=long_description,
-    long_description_content_type='text/markdown',
+    long_description_content_type="text/markdown",
     install_requires=get_requirements(),
     packages=["pymush"],
     zip_safe=False,
