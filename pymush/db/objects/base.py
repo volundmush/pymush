@@ -43,7 +43,7 @@ class GameObject:
         self.namespaces: Dict[str, weakref.WeakSet] = defaultdict(weakref.WeakSet)
         self._namespace: Optional[GameObject] = None
         self.session: Optional["GameSession"] = None
-        self.account_sessions: Set["GameSession"] = set()
+        self.account_sessions: Set["GameSession"] = weakref.WeakSet()
         self.connections: Set["Connection"] = set()
         self.attributes = game.app.classes['game']['attributehandler'](self, self.game.attributes)
         self.sys_attributes = dict()
@@ -52,7 +52,7 @@ class GameObject:
         self._destination: Optional[GameObject] = None
         self.db_quota: int = 0
         self.cpu_quota: float = 0.0
-        self.admin_level: int = 0
+        self._admin_level: Optional[int] = None
         self.style_holder: Optional[StyleHandler] = None
         self.scripts = ScriptHandler(self)
 
@@ -106,7 +106,7 @@ class GameObject:
                 del old._owner_of_type[self.type_name][self.objid]
             found._owner_of[self.objid] = self
             found._owner_of_type[self.type_name][self.objid] = self
-            self._owner = weakref.proxy(found)
+            self._owner = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
         else:
             if old:
                 del old._owner_of[self.objid]
@@ -148,7 +148,7 @@ class GameObject:
             if old and found != old:
                 del old._zone_of[self.objid]
             found._zone_of[self.objid] = self
-            self._zone = weakref.proxy(found)
+            self._zone = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
         else:
             if old:
                 del old._zone_of[self.objid]
@@ -226,7 +226,7 @@ class GameObject:
             if old and found != old:
                 del old._parent_of[self.objid]
             found._parent_of[self.objid] = self
-            self._parent = weakref.proxy(found)
+            self._parent = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
         else:
             if old:
                 del old._parent_of[self.objid]
@@ -270,7 +270,7 @@ class GameObject:
             if old and found != old:
                 del old._location_of[self.objid]
             found._location_of[self.objid] = self
-            self._location = weakref.proxy(found)
+            self._location = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
         else:
             if old:
                 del old._location_of[self.objid]
@@ -303,7 +303,7 @@ class GameObject:
             if old and found != old:
                 old.namespaces[self.type_name].remove(self)
             found.namespaces[self.type_name].add(self)
-            self._namespace = weakref.proxy(found)
+            self._namespace = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
         else:
             if old:
                 old.namespaces[self.type_name].remove(self)
@@ -325,7 +325,7 @@ class GameObject:
                 raise ValueError(f"{self.objid} cannot point at itself!")
             if not found.can_be_destination:
                 raise ValueError(f"{found.objid} cannot be a destination!")
-            self._destination = weakref.proxy(found)
+            self._destination = weakref.proxy(found) if not isinstance(found, weakref.ProxyType) else found
         else:
             self._destination = None
 
@@ -397,25 +397,36 @@ class GameObject:
     def receive_msg(self, message: fmt.FormatList):
         pass
 
+    @property
+    def alevel(self):
+        real_level = self._admin_level
+        if real_level is None:
+            return self.game.alevel_of(self.type_name)
+        return real_level
+
+    @alevel.setter
+    def alevel(self, value: Optional[int]):
+        self._admin_level = value
+
     def get_alevel(self, ignore_fake=False):
         if self.session:
             return self.session.get_alevel(ignore_fake=ignore_fake)
 
         if self.owner:
-            return self.root_owner.admin_level
+            return self.root_owner.alevel
         else:
-            return self.admin_level
+            return self.alevel
 
     def get_dub(self, target):
         dubs = self.sys_attributes.get('dubs', dict())
-        return dubs.get((target.dbid, target.created), None)
+        return dubs.get(target.objid, None)
 
     def set_sub(self, target, value: str):
         dubs = self.sys_attributes.get('dubs', dict())
         if value:
-            dubs[(target.dbid, target.created)] = value
+            dubs[target.objid] = value
         else:
-            dubs.pop((target.dbid, target.created), None)
+            dubs.pop(target.objid, None)
         self.sys_attributes['dubs'] = dubs
 
     def generate_name_for(self, target):
@@ -449,7 +460,7 @@ class GameObject:
 
     def locate_object(self, name: Union[str, MudText], general=True, dbref=True, location=True, contents=True, candidates=None,
                       use_names=True, use_nicks=True, use_aliases=True, use_dub=True, exact=False, first_only=False,
-                      multi_match=False, filter_visible=True):
+                      multi_match=False, filter_visible=True, include_inactive=False):
         if isinstance(name, MudText):
             name = name.plain
         name = name.strip()
@@ -505,10 +516,13 @@ class GameObject:
         if self in total_candidates:
             total_candidates.remove(self)
 
+        total_candidates = list(total_candidates)
+
+        if not include_inactive:
+            total_candidates = filter(lambda x: x.active(), total_candidates)
+
         if filter_visible:
-            total_candidates = [c for c in total_candidates if self.can_perceive(c)]
-        else:
-            total_candidates = list(total_candidates)
+            total_candidates = filter(lambda x: self.can_perceive(x), total_candidates)
 
         keywords = defaultdict(list)
         full_names = defaultdict(list)
@@ -568,11 +582,22 @@ class GameObject:
         parser = interpreter.make_parser(executor=self, enactor=viewer)
         out = fmt.FormatList(viewer)
 
+        see_dbrefs = viewer.session.admin if viewer.session else True
+
+        def format_name(obj, cmd=None):
+            name = viewer.get_dub_or_keyphrase_for(obj)
+            display = ansi_fun('hw', name)
+            if cmd:
+                display = send_menu(display, [(f"{cmd} {name}", cmd)])
+            if see_dbrefs:
+                display += f' ({obj.dbref})'
+            return display
+
         if (nameformat := self.attributes.get_value('NAMEFORMAT')):
-            result = parser.evaluate(nameformat, executor=self, number_args={0: self.dbref, 1: self.name})
+            result = parser.evaluate(nameformat, executor=self, number_args={0: self.objid, 1: self.name})
             out.add(fmt.Line(result))
         else:
-            out.add(fmt.Line(ansi_fun('hw', self.name) + f" ({self.dbref})"))
+            out.add(fmt.Line(format_name(self)))
 
         if internal and (idesc := self.attributes.get_value('IDESCRIBE')):
             idesc_eval = parser.evaluate(idesc, executor=self)
@@ -590,27 +615,34 @@ class GameObject:
             else:
                 out.add(fmt.Line(desc_eval))
 
-        if (contents := self.contents):
-            if (conformat := self.attributes.get_value('CONFORMAT')):
-                contents_objids = ' '.join([con.objid for con in contents])
-                result = parser.evaluate(conformat, executor=self, number_args=(contents_objids,))
-                out.add(fmt.Line(result))
-            else:
-                con = [MudText("Contents:")]
-                for obj in contents:
-                    con.append(f" * " + send_menu(ansi_fun('hw', obj.name), [(f'look {obj.name}', 'Look')]) + f" ({obj.dbref})")
-                out.add(fmt.Line(MudText('\n').join(con)))
+        if (contents := filter(lambda x: x.active() and viewer.can_perceive(x), self.contents)):
+            contents = sorted(contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x))
+            if contents:
+                if (conformat := self.attributes.get_value('CONFORMAT')):
+                    contents_objids = ' '.join([con.objid for con in contents])
+                    result = parser.evaluate(conformat, executor=self, number_args=(contents_objids,))
+                    out.add(fmt.Line(result))
+                else:
+                    if viewer in contents:
+                        contents.remove(viewer)
+                    if contents:
+                        con = [MudText("Contents:")]
+                        for obj in contents:
+                            con.append(f" * " + format_name(obj, 'look'))
+                        out.add(fmt.Line(MudText('\n').join(con)))
 
-        if (contents := self.namespaces['EXIT']):
-            if (conformat := self.attributes.get_value('EXITFORMAT')):
-                contents_objids = ' '.join([con.objid for con in contents])
-                result = parser.evaluate(conformat, executor=self, number_args=(contents_objids,))
-                out.add(fmt.Line(result))
-            else:
-                con = [MudText("Exits:")]
-                for obj in contents:
-                    con.append(f" * " + send_menu(ansi_fun('hw', obj.name), [(f'look {obj.name}', 'Look')]) + f" ({obj.dbref})")
-                out.add(fmt.Line(MudText('\n').join(con)))
+        if (contents := filter(lambda x: x.active() and viewer.can_perceive(x), self.namespaces['EXIT'])):
+            contents = sorted(contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x))
+            if contents:
+                if (conformat := self.attributes.get_value('EXITFORMAT')):
+                    contents_objids = ' '.join([con.objid for con in contents])
+                    result = parser.evaluate(conformat, executor=self, number_args=(contents_objids,))
+                    out.add(fmt.Line(result))
+                else:
+                    con = [MudText("Exits:")]
+                    for obj in contents:
+                        con.append(f" * " + format_name(obj, 'goto'))
+                    out.add(fmt.Line(MudText('\n').join(con)))
 
         viewer.send(out)
 
@@ -652,9 +684,11 @@ class GameObject:
 
         self.location = destination
 
-    def update(self, delta: float):
+    def update(self, now: float, delta: float):
         pass
 
     def setup(self):
         pass
 
+    def active(self):
+        return True

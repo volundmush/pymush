@@ -26,6 +26,12 @@ class BaseApi:
     def caller(self):
         return self.parser.frame.caller
 
+    def send(self, *args, **kwargs):
+        self.executor.send(*args, **kwargs)
+
+    def msg(self, text=None, **kwargs):
+        self.executor.msg(text=text, **kwargs)
+
     def split_cmd_args(self, text: Union[str, MudText]):
         escaped = False
         curly_depth = 0

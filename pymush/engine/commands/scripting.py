@@ -179,7 +179,7 @@ class ScriptCommandMatcher(PythonCommandMatcher):
         if t == QueueEntryType.SCRIPT:
             return True
         elif t == QueueEntryType.IC:
-            return interpreter.entry.session.build
+            return interpreter.entry.session.admin
 
     def at_cmdmatcher_creation(self):
         cmds = [DoListCommand, AssertCommand, BreakCommand, TriggerCommand, IncludeCommand, SwitchCommand,

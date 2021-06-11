@@ -5,7 +5,7 @@ from athanor.utils import partial_match
 from mudstring.encodings.pennmush import ansi_fun
 
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
-from . shared import PyCommand, HelpCommand
+from . shared import PyCommand, HelpCommand, QuitCommand
 
 
 class PennBindCommand(MushCommand):
@@ -47,29 +47,30 @@ class CharCreateCommand(Command):
     name = "@charcreate"
     re_match = re.compile(r"^(?P<cmd>@charcreate)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
     help_category = 'Character Management'
+    character_type = 'PLAYER'
 
     def execute(self):
         mdict = self.match_obj.groupdict()
         if not (name := mdict.get("args", None)):
             raise CommandException("Must enter a name for the character!")
-        identity = self.enactor.core.identity_prefix['C']
-        char, error = self.game.mapped_typeclasses["mobile"].create(name=name, identity=identity)
+        owner = self.interpreter.user
+        char, error = self.game.create_object(self.character_type, name, namespace=owner, owner=owner)
         if error:
             raise CommandException(error)
-        acc = self.enactor.relations.get('account', None)
-        acc.characters.add(char)
-        self.msg(text=ansi_fun("", f"Character '{char.name}' created! Use ") + ansi_fun("hw", f"charselect {char.name}") + " to join the game!")
+        self.msg(text=ansi_fun("", f"Character '{char.name}' created! Use ") + ansi_fun("hw", f"@ic {char.name}") + " to join the game!")
 
 
 class CharSelectCommand(Command):
     name = "@ic"
     re_match = re.compile(r"^(?P<cmd>@ic)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
     help_category = 'Character Management'
+    character_type = 'PLAYER'
 
     def execute(self):
         mdict = self.match_obj.groupdict()
-        acc = self.entry.user
-        if not (chars := acc._owner_of_type['PLAYER'].values()):
+        acc = self.interpreter.user
+
+        if not (chars := acc.namespaces[self.character_type]):
             raise CommandException("No characters to join the game as!")
         if not (args := mdict.get("args", None)):
             names = ', '.join([obj.name for obj in chars])
@@ -78,7 +79,9 @@ class CharSelectCommand(Command):
         if not (found := partial_match(args, chars, key=lambda x: x.name)):
             self.msg(text=f"Sorry, no character found named: {args}")
             return
-        self.entry.game.create_or_join_session(self.entry.connection, found)
+        error = self.entry.game.create_or_join_session(self.entry.connection, found)
+        if error:
+            raise CommandException(error)
 
 
 class SelectScreenCommand(Command):
@@ -101,6 +104,27 @@ class ThinkCommand(MushCommand):
                 self.msg(text=result)
 
 
+class LogoutCommand(MushCommand):
+    name = '@logout'
+    aliases = ['@logo', '@logou']
+    help_category = 'System'
+
+    def execute(self):
+        self.enactor.logout()
+        self.enactor.show_welcome_screen()
+
+
+class OOCPyCommand(PyCommand):
+
+    @classmethod
+    def access(cls, interpreter):
+        return interpreter.user.get_alevel() >= 10
+
+    def available_vars(self):
+        out = super().available_vars()
+        out["user"] = self.entry.user
+        return out
+
 
 class SelectCommandMatcher(PythonCommandMatcher):
 
@@ -114,3 +138,6 @@ class SelectCommandMatcher(PythonCommandMatcher):
         self.add(ThinkCommand)
         self.add(PennBindCommand)
         self.add(HelpCommand)
+        self.add(LogoutCommand)
+        self.add(QuitCommand)
+        self.add(OOCPyCommand)

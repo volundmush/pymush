@@ -21,7 +21,8 @@ from .utils.misc import callables_from_module
 
 class GameService(Service):
 
-    def __init__(self):
+    def __init__(self, app):
+        super().__init__(app)
         self.app.game = self
         self.queue = CmdQueue(self)
         self.objects: OrderedDict[int, GameObject] = OrderedDict()
@@ -203,12 +204,16 @@ class GameService(Service):
 
     def create_or_join_session(self, connection: "Connection", character: "GameObject"):
         if not (sess := self.sessions.get(character.dbid, None)):
+            if len(connection.user.account_sessions) > connection.user.max_sessions():
+                return "Too many Sessions already in play for this User Account!"
             sess = self.app.classes['game']['gamesession'](connection.user, character)
+            self.sessions[character.dbid] = sess
+            connection.user.account_sessions.add(sess)
         connection.join_session(sess)
 
-    def update(self, delta: float):
+    def update(self, now: float, delta: float):
         for obj in self.update_subscribers:
-            obj.update(delta)
+            obj.update(now, delta)
 
     def get_start_location(self, type_name: str):
         o = self.app.config.game_options
@@ -225,3 +230,8 @@ class GameService(Service):
         elif isinstance(check, OLD_TEXT):
             check = check.plain
             return self.db_objects.get(check, None)
+
+    def alevel_of(self, type_name: str):
+        if type_name in self.app.config.game_options['type_alevel']:
+            return self.app.config.game_options['type_alevel'][type_name]
+        return self.app.config.game_options['default_alevel']

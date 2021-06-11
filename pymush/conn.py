@@ -5,6 +5,9 @@ from typing import Optional, Set, List
 
 from mudstring.patches.console import MudConsole
 from rich.color import ColorSystem
+from rich.console import _null_highlighter
+from rich.highlighter import ReprHighlighter
+from mudstring.patches.traceback import MudTraceback
 
 from athanor.shared import ConnectionDetails, ConnectionInMessage, ConnectionInMessageType
 from athanor.shared import ConnectionOutMessage, ConnectionOutMessageType, ColorSystem
@@ -38,6 +41,8 @@ class Connection(BaseConnection):
         self.session: Optional["GameSession"] = None
         self.console = MudConsole(color_system=COLOR_MAP[details.color] if details.color else None,
                                   mxp=details.mxp_active, file=self, width=details.width)
+        self._repr_highlighter = self.console.highlighter
+        self.console.highlighter = _null_highlighter
         self.menu = None
         self.conn_style = StyleHandler(self, save=False)
 
@@ -55,7 +60,7 @@ class Connection(BaseConnection):
         pass
 
     def write(self, b: str):
-        self.out_events.append(ConnectionOutMessage(ConnectionOutMessageType.LINE, self.client_id, b))
+        self.out_gamedata.append(('line', (b,), dict()))
 
     def on_update(self, details: ConnectionDetails):
         self.details = details
@@ -64,28 +69,39 @@ class Connection(BaseConnection):
         self.console._width = details.width
 
     def on_process_event(self, ev: ConnectionInMessage):
-        if ev.msg_type == ConnectionInMessageType.LINE:
-            cmd: str = ev.data
-            if cmd.upper() == "IDLE":
-                return
+        if ev.msg_type == ConnectionInMessageType.GAMEDATA:
             now = time.time()
-            self.last_activity = now
-            if self.session:
-                entry = QueueEntry.from_ic(self.session, cmd, self)
-                self.session.last_cmd = now
-            elif self.user:
-                entry = QueueEntry.from_ooc(self.user, cmd, self)
-            else:
-                entry = QueueEntry.from_login(self, cmd)
-            self.game.queue.push(entry)
+            for cmd, args, kwargs in ev.data:
+                if cmd in ('text', 'line'):
+                    command = args[0]
+                    if command.upper() == "IDLE":
+                        return
+                    self.last_activity = now
+                    if self.session:
+                        entry = QueueEntry.from_ic(self.session, command, self)
+                        self.session.last_cmd = now
+                    elif self.user:
+                        entry = QueueEntry.from_ooc(self.user, command, self)
+                    else:
+                        entry = QueueEntry.from_login(self, command)
+                    self.game.queue.push(entry)
 
     def print(self, *args, **kwargs):
-        self.console.print(*args, **kwargs)
+        self.console.print(*args, highlight=False, **kwargs)
 
-    def flush_out_events(self):
-        pass
+    def print_exception(self, trace):
+        tb = MudTraceback(trace=trace, width=self.console.width)
+        self.console.print(tb)
+
+    def print_python(self, *args, **kwargs):
+        self.console.highlighter = self._repr_highlighter
+        self.console.print(*args, **kwargs)
+        self.console.highlighter = _null_highlighter
 
     def on_client_connect(self):
+        self.show_welcome_screen()
+
+    def show_welcome_screen(self):
         self.print(WELCOME)
 
     def listeners(self):
@@ -110,15 +126,38 @@ class Connection(BaseConnection):
         account.last_login = time.time()
         account.connections.add(self)
         self.show_select_screen()
+        if len(account.connections) == 1:
+            account.on_first_connection_login(self)
+        account.on_connection_login(self)
 
     def show_select_screen(self):
         self.receive_msg(render_select_screen(self))
+
+    def terminate(self):
+        if self.session:
+            self.leave_session()
+        if self.user:
+            self.logout()
+        self.disconnect = True
 
     def logout(self):
         user = self.user
         if user:
             self.user = None
             user.connections.remove(self)
+            user.on_connection_logout(self)
+            if not user.connections:
+                user.on_final_connection_logout(self)
+
+    def leave_session(self):
+        if not self.session:
+            return
+        session = self.session
+        session.connections.remove(self)
+        session.on_connection_leave(self)
+        if not session.connections:
+            session.on_final_connection_leave(self)
+        self.session = None
 
     def join_session(self, session: "GameSession"):
         session.connections.add(self)
@@ -168,10 +207,9 @@ class PromptHandler:
         self.last_prompt = 0.0
         self.delta = 0.0
 
-    def update(self, delta: float):
+    def update(self, now: float, delta: float):
         diff = self.last_activity - self.last_prompt
         if diff:
-            now = time.time()
             diff2 = now - self.last_activity
             if diff2 > self.owner.game.app.config.game_options['prompt_delay']:
                 self.send_prompt()
@@ -189,10 +227,11 @@ class GameSession:
         weakchar = weakref.proxy(character)
         self.character: "GameObject" = weakchar
         self.puppet: "GameObject" = weakchar
-        self.connections: Set["Connection"] = set()
+        self.connections: Set["Connection"] = weakref.WeakSet()
         self.in_events: List[ConnectionInMessage] = list()
         self.out_events: List[ConnectionOutMessage] = list()
         self.admin = False
+        self.ending_safely = False
         self.character.session = self
         self.user.account_sessions.add(self)
         now = time.time()
@@ -209,8 +248,8 @@ class GameSession:
 
     def get_alevel(self, ignore_fake=False):
         if not self.admin and not ignore_fake:
-            return min(self.user.admin_level, self.character.admin_level)
-        return self.user.admin_level
+            return min(self.user.alevel, self.character.alevel)
+        return self.user.alevel
 
     @property
     def style(self):
@@ -259,6 +298,34 @@ class GameSession:
         self._gather_help(entry, data, self.session_matchers)
         self.puppet.gather_help(entry, data)
 
-    def update(self, delta: float):
-        self.prompt.update(delta)
+    def update(self, now: float, delta: float):
+        self.prompt.update(now, delta)
 
+    def on_connection_leave(self, connection: Connection):
+        pass
+
+    def on_final_connection_leave(self, connection: Connection):
+        if self.ending_safely:
+            self.cleanup()
+        else:
+            pass
+
+    def cleanup(self):
+        self.puppet.session = None
+        if self.character.session:
+            self.character.session = None
+        self.user.account_sessions.remove(self)
+
+    def can_end_safely(self):
+        return True, None
+
+    def end_safely(self):
+        self.ending_safely = True
+        conns = list(self.connections)
+        for conn in conns:
+            conn.leave_session()
+            conn.show_select_screen()
+        self.user.game.sessions.pop(self.character.dbid, None)
+
+    def see_tracebacks(self):
+        return self.get_alevel(ignore_fake=True) >= 10

@@ -132,6 +132,21 @@ class Line(BaseFormatter):
             conn.print(self.data)
 
 
+class PyDebug(Line):
+
+    def text(self, formatter, conn: "Connection", user: Optional["User"] = None,
+             character: Optional["GameObject"] = None):
+        if self.data:
+            conn.print_python(self.data)
+
+
+class PyException(Line):
+
+    def text(self, formatter, conn: "Connection", user: Optional["User"] = None,
+             character: Optional["GameObject"] = None):
+        conn.print_exception(self.data)
+
+
 class OOB(BaseFormatter):
     pass
 

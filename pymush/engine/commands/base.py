@@ -17,6 +17,14 @@ class Command(BaseApi):
     aliases = []
     help_category = None
 
+    @property
+    def session(self):
+        return self.interpreter.session
+
+    @property
+    def connection(self):
+        return self.interpreter.connection
+
     @classmethod
     def access(cls, interpreter: "Interpreter"):
         """
@@ -80,11 +88,7 @@ class Command(BaseApi):
     def at_post_execute(self):
         pass
 
-    def msg(self, text=None, **kwargs):
-        self.entry.enactor.msg(text=text, **kwargs)
 
-    def send(self, message):
-        self.entry.enactor.send(message)
 
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.name}>"

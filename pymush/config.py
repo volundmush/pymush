@@ -28,7 +28,7 @@ class Config(BaseConfig):
         self.classes["game"]["attributemanager"] = "pymush.db.attributes.AttributeManager"
         self.classes["game"]["attributehandler"] = "pymush.db.attributes.AttributeHandler"
         self.classes["game"]["scripthandler"] = "pymush.db.scripts.ScriptHandler"
-        self.classes['game']['contentshandler'] = "pymush.db.objects.base.ContentsHandler"
+        self.classes['game']['prompthandler'] = "pymush.conn.PromptHandler"
         self.classes['services']['game'] = "pymush.game.GameService"
 
         self.classes['gameobject']['EXIT'] = 'pymush.db.objects.exit.Exit'

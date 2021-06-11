@@ -8,6 +8,7 @@ from mudstring.encodings.pennmush import send_menu, ansi_fun
 from athanor.utils import partial_match
 
 from pymush.utils import formatter as fmt
+from mudstring.patches.traceback import MudTraceback
 
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
 
@@ -35,15 +36,19 @@ class PyCommand(Command):
         pass
 
     def write(self, text):
-        self.msg(text=text.rsplit("\n", 1)[0])
+        out = fmt.FormatList(self.enactor)
+        out.add(fmt.PyDebug(text.rsplit("\n", 1)[0]))
+        self.enactor.send(out)
 
     def execute(self):
         mdict = self.match_obj.groupdict()
         args = mdict.get("args", None)
         if not args:
             raise CommandException("@py requires arguments!")
-
-        self.msg(text=f">>> {args}")
+        out = fmt.FormatList(self.enactor)
+        out.add(fmt.PyDebug(f">>> {repr(args)}"))
+        duration = ''
+        ret = None
 
         try:
             # reroute standard output to game client console
@@ -67,30 +72,23 @@ class PyCommand(Command):
                 ret = eval(pycode_compiled, {}, self.available_vars())
                 t1 = time.time()
                 duration = " (runtime ~ %.4f ms)" % ((t1 - t0) * 1000)
-                self.msg(text=duration)
             else:
                 ret = eval(pycode_compiled, {}, self.available_vars())
-
         except Exception:
-            errlist = traceback.format_exc().split("\n")
-            if len(errlist) > 4:
-                errlist = errlist[4:]
-            ret = "\n".join("%s" % line for line in errlist if line)
+            exc_type, exc_value, tb = sys.exc_info()
+            trace = MudTraceback.extract(
+                exc_type, exc_value, tb, show_locals=False
+            )
+            out.add(fmt.PyException(trace))
         finally:
             # return to old stdout
             sys.stdout = old_stdout
             sys.stderr = old_stderr
 
-        if ret is None:
-
-            return
-        elif isinstance(ret, tuple):
-
-            # we must convert here to allow msg to pass it (a tuple is confused
-            # with a outputfunc structure)
-            ret = str(ret)
-
-        self.msg(text=repr(ret))
+        out.add(fmt.PyDebug(repr(ret)))
+        if duration:
+            out.add(fmt.Line(duration))
+        self.enactor.send(out)
 
 
 class HelpCommand(Command):
@@ -131,3 +129,19 @@ class HelpCommand(Command):
         if not (found := partial_match(name, total, key=lambda x: x.name)):
             raise CommandException(f"No help for: {name}")
         found.help(self.entry)
+
+
+class QuitCommand(Command):
+    """
+    Disconnects this connection from the game.
+    """
+    name = 'QUIT'
+    re_match = re.compile(r"^(?P<cmd>QUIT)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
+    help_category = 'System'
+
+    def execute(self):
+        out = fmt.FormatList(self.enactor)
+        out.add(fmt.Line("See you again!"))
+        out.reason = 'quit'
+        self.send(out)
+        self.enactor.terminate()

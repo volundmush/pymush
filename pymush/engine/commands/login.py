@@ -5,7 +5,7 @@ from mudstring.encodings.pennmush import ansi_fun, send_menu
 from pymush.utils import formatter as fmt
 
 from . base import Command, MushCommand, CommandException, PythonCommandMatcher
-from . shared import PyCommand, HelpCommand
+from . shared import PyCommand, HelpCommand, QuitCommand
 
 
 class _LoginCommand(Command):
@@ -84,25 +84,7 @@ class CreateCommand(_LoginCommand):
         self.msg(text="Account created! You can login with " + ansi_fun('hw', cmd))
 
 
-class QuitCommand(Command):
-    """
-    Disconnects this connection from the game.
-    """
-    name = 'QUIT'
-    re_match = re.compile(r"^(?P<cmd>QUIT)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
-    help_category = 'System'
 
-    def execute(self):
-        if (pview := self.entry.enactor.relations.get('playview', None)):
-            mdict = self.match_obj.groupdict()
-            args = mdict.get('args', "")
-            if args is None or not args.upper().startswith('FORCE'):
-                raise CommandException("Use QUIT FORCE to disconnect while IC. This may leave your character linkdead for a time. Use @ooc then QUIT to cleanly logout.")
-        out = fmt.FormatList(self.entry.enactor)
-        out.add(fmt.Line("See you again!"))
-        out.disconnect = True
-        out.reason = 'quit'
-        self.send(out)
 
 
 class LoginPyCommand(PyCommand):
@@ -138,3 +120,5 @@ class LoginCommandMatcher(PythonCommandMatcher):
         self.add(LoginPyCommand)
         self.add(Test)
         self.add(HelpCommand)
+        self.add(QuitCommand)
+

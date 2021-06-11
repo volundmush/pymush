@@ -10,12 +10,16 @@ from enum import IntEnum
 
 from mudstring.patches.text import OLD_TEXT, MudText
 
+from mudstring.patches.traceback import MudTraceback
+
 from athanor_server.conn import Connection
 from pymush.db.objects.base import GameObject
 from pymush.utils.text import find_matching, find_notspace
-
 from .commands.base import CommandException
 from .parser import Parser, StackFrame
+from pymush.utils import formatter as fmt
+
+STD_OUT = sys.stdout
 
 
 class QueueEntryType(IntEnum):
@@ -119,7 +123,20 @@ class QueueEntry:
             except CPUTimeExceeded as cpu:
                 pass
         except Exception as e:
-            print(f"Something foofy happened: {e}")
+            trace = None
+            if self.session or self.connection:
+                exc_type, exc_value, tb = sys.exc_info()
+                trace = MudTraceback.extract(
+                    exc_type, exc_value, tb, show_locals=False
+                )
+            if trace and self.type == QueueEntryType.IC and self.session.see_tracebacks():
+                out = fmt.FormatList(self.session)
+                out.add(fmt.PyException(trace))
+                self.session.send(out)
+            elif trace and self.type == QueueEntryType.OOC and self.user.see_tracebacks():
+                out = fmt.FormatList(self.session)
+                out.add(fmt.PyException(trace))
+                self.session.send(out)
             traceback.print_exc(file=sys.stdout)
 
     @property
@@ -159,6 +176,14 @@ class Interpreter:
     @property
     def session(self):
         return self.entry.session
+
+    @property
+    def user(self):
+        return self.entry.user
+
+    @property
+    def connection(self):
+        return self.entry.connection
 
     @property
     def game(self):
@@ -320,7 +345,7 @@ class CmdQueue:
                         self.current_entry = entry
                         entry.execute()
                 except Exception as e:
-                    print(f"Oops, CmdQueue encountered Exception: {str(e)}")
+                    self.game.app.console.print_exception()
                 finally:
                     self.current_entry = None
             else:

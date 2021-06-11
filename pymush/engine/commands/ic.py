@@ -4,15 +4,41 @@ from . base import MushCommand, CommandException, PythonCommandMatcher, BaseComm
 from .shared import PyCommand, HelpCommand
 
 
+class LogoutCommand(Command):
+    name = '@logout'
+    re_match = re.compile(r"^(?P<cmd>@logout)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
+
+    def execute(self):
+        mdict = self.match_obj.groupdict()
+        args = mdict['args']
+        if args is None:
+            args = ''
+        can_end, why_not = self.session.can_end_safely()
+        if can_end:
+            self.session.end_safely()
+            return
+        elif args.lower() == 'force':
+            self.session.end_unsafely()
+        else:
+            if why_not:
+                self.enactor.msg(why_not)
+            self.enactor.msg("Cannot safely logout right now. To terminate cohnnections while leaving session linkdead, use @logout force")
+
+
 class OOCCommand(Command):
     name = '@ooc'
     re_match = re.compile(r"^(?P<cmd>@ooc)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     def execute(self):
-        for con in self.enactor.connections.all():
-            con.leave(self.enactor)
-            self.enactor.core.selectscreen(con)
-        self.msg(text="Character returned to storage.")
+        mdict = self.match_obj.groupdict()
+        args = mdict['args']
+        if args is None:
+            args = ''
+        if len(self.session.connections) == 1:
+            self.enactor.msg("Cannot go @ooc with just one connection left on the session! To logout, use @logout instead.")
+            return
+        self.connection.leave_session()
+        self.connection.show_select_screen()
 
 
 class SessionPyCommand(PyCommand):
@@ -27,9 +53,9 @@ class SessionPyCommand(PyCommand):
         return out
 
 
-class QuellCommand(PyCommand):
+class AdminCommand(PyCommand):
     name = '@admin'
-    re_match = re.compile(r"^(?P<cmd>@quell)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
+    re_match = re.compile(r"^(?P<cmd>@admin)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     @classmethod
     def access(cls, interpreter):
@@ -43,20 +69,17 @@ class QuellCommand(PyCommand):
             self.msg(text="You are no longer in admin mode. Admin permissions suppressed.")
 
 
-class BuildCommand(PyCommand):
-    name = '@build'
-    re_match = re.compile(r"^(?P<cmd>@build)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
-
-    @classmethod
-    def access(cls, interpreter):
-        return interpreter.session.get_alevel() >= 1
+class QuitCommand(Command):
+    """
+    Disconnects this connection from the game.
+    """
+    name = 'QUIT'
+    re_match = re.compile(r"^(?P<cmd>QUIT)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
+    help_category = 'System'
 
     def execute(self):
-        self.entry.session.build = not self.entry.session.build
-        if self.entry.session.build:
-            self.msg(text="You are now in building mode! Scripting commands enabled.")
-        else:
-            self.msg(text="You are no longer building! Scripting commands disabled.")
+        raise Exception("This is a test of the command exception system!")
+        #self.enactor.msg("Cannot QUIT while @ic! Please see @ooc and @logout instead!")
 
 
 class SessionCommandMatcher(PythonCommandMatcher):
@@ -67,6 +90,7 @@ class SessionCommandMatcher(PythonCommandMatcher):
     def at_cmdmatcher_creation(self):
         self.add(OOCCommand)
         self.add(SessionPyCommand)
-        self.add(QuellCommand)
+        self.add(AdminCommand)
         self.add(HelpCommand)
-        self.add(BuildCommand)
+        self.add(QuitCommand)
+        self.add(LogoutCommand)

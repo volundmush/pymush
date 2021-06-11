@@ -4,6 +4,10 @@ from typing import Optional, List, Set, Dict, Union
 
 from rich import pretty
 pretty.install()
+from rich import traceback
+#traceback.install()
+from rich.console import Console
+
 
 from athanor_server.app import Application as BaseApplication
 from .game import GameService
@@ -16,3 +20,4 @@ class Application(BaseApplication):
     def __init__(self, config: Config):
         super().__init__(config)
         self.game: Optional[GameService] = None
+        self.console = Console()

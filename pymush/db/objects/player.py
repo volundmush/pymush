@@ -29,3 +29,6 @@ class Player(GameObject):
             return self.get_dub_or_keyphrase_for(viewer)
         else:
             return self.name
+
+    def active(self):
+        return bool(self.session)

@@ -84,3 +84,21 @@ class User(GameObject):
             self.sys_attributes['characters'] = [int(c) for c in characters]
         else:
             self.sys_attributes.pop('characters', None)
+
+    def on_connection_logout(self, connection: "Connection"):
+        pass
+
+    def on_final_connection_logout(self, connection: "Connection"):
+        pass
+
+    def on_first_connection_login(self, connection: "Connection"):
+        pass
+
+    def on_connection_login(self, connection: "Connection"):
+        pass
+
+    def max_sessions(self):
+        return 999
+
+    def see_tracebacks(self):
+        return self.get_alevel(ignore_fake=True) >= 10
