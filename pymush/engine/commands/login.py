@@ -1,6 +1,6 @@
 import re
 
-from mudstring.encodings.pennmush import ansi_fun, send_menu
+from mudrich.encodings.pennmush import ansi_fun, send_menu
 
 from pymush.utils import formatter as fmt
 
@@ -56,9 +56,9 @@ class ConnectCommand(_LoginCommand):
         + ansi_fun("hw", 'connect "<user name>" password')
     )
 
-    def execute(self):
+    async def execute(self):
         name, password = self.parse_login(self.usage)
-        result, err = self.entry.connection.check_login(name, password)
+        result, err = await self.connection.check_login(self.entry, name, password)
         if not result:
             raise CommandException(err)
 
@@ -83,9 +83,9 @@ class CreateCommand(_LoginCommand):
         + ansi_fun("hw", 'create "<user name>" <password>')
     )
 
-    def execute(self):
+    async def execute(self):
         name, password = self.parse_login(self.usage)
-        result, err = self.entry.connection.create_user(name, password)
+        result, err = await self.connection.create_user(self.entry, name, password)
         if not result:
             raise CommandException(err)
 

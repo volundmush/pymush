@@ -1,5 +1,5 @@
-from rich.text import Text
-from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style, ansify
+from mudrich.text import Text
+from mudrich.encodings.pennmush import ansi_fun, ansi_fun_style, ansify
 
 from .base import BaseFunction
 
@@ -12,9 +12,9 @@ class AnsiFunction(_AbstractStringFunction):
     name = "ansi"
     exact_args = 2
 
-    def do_execute(self):
-        codes = self.parser.evaluate(self.args[0])
-        text = self.parser.evaluate(self.args[1])
+    async def do_execute(self):
+        codes = await self.parser.evaluate(self.args[0])
+        text = await self.parser.evaluate(self.args[1])
 
         try:
             style = ansi_fun_style(codes.plain)
@@ -27,9 +27,9 @@ class ScrambleFunction(_AbstractStringFunction):
     name = "scramble"
     exact_args = 1
 
-    def do_execute(self):
+    async def do_execute(self):
         if self.args:
-            return self.parser.evaluate(self.args[0]).scramble()
+            return await self.parser.evaluate(self.args[0]).scramble()
         else:
             return Text("")
 
@@ -38,8 +38,8 @@ class ReverseFunction(_AbstractStringFunction):
     name = "reverse"
     exact_args = 1
 
-    def do_execute(self):
+    async def do_execute(self):
         if self.args:
-            return self.parser.evaluate(self.args[0]).reverse()
+            return await self.parser.evaluate(self.args[0]).reverse()
         else:
             return Text("")

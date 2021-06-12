@@ -2,7 +2,7 @@ import re
 
 from athanor.utils import partial_match
 
-from mudstring.encodings.pennmush import ansi_fun
+from mudrich.encodings.pennmush import ansi_fun
 
 from .base import Command, MushCommand, CommandException, PythonCommandMatcher
 from .shared import PyCommand, HelpCommand, QuitCommand
@@ -22,7 +22,7 @@ class PennBindCommand(MushCommand):
     aliases = ["@pbi", "@pbin"]
     help_category = "Character Management"
 
-    def execute(self):
+    async def execute(self):
         target = self.gather_arg()
         password = self.gather_arg()
         if not (target and password):
@@ -54,13 +54,13 @@ class CharCreateCommand(Command):
     help_category = "Character Management"
     character_type = "PLAYER"
 
-    def execute(self):
+    async def execute(self):
         mdict = self.match_obj.groupdict()
         if not (name := mdict.get("args", None)):
             raise CommandException("Must enter a name for the character!")
-        owner = self.interpreter.user
-        char, error = self.game.create_object(
-            self.character_type, name, namespace=owner, owner=owner
+        user = self.entry.user
+        char, error = await self.game.create_object(self.entry,
+            self.character_type, name, namespace=user, owner=user
         )
         if error:
             raise CommandException(error)
@@ -77,7 +77,7 @@ class CharSelectCommand(Command):
     help_category = "Character Management"
     character_type = "PLAYER"
 
-    def execute(self):
+    async def execute(self):
         mdict = self.match_obj.groupdict()
         acc = self.interpreter.user
 
@@ -90,7 +90,7 @@ class CharSelectCommand(Command):
         if not (found := partial_match(args, chars, key=lambda x: x.name)):
             self.msg(text=f"Sorry, no character found named: {args}")
             return
-        error = self.entry.game.create_or_join_session(self.entry.connection, found)
+        error = await self.entry.game.create_or_join_session(self.entry, self.entry.connection, found)
         if error:
             raise CommandException(error)
 
@@ -99,8 +99,8 @@ class SelectScreenCommand(Command):
     name = "look"
     re_match = re.compile(r"^(?P<cmd>look)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
-    def execute(self):
-        self.game.selectscreen(self.enactor)
+    async def execute(self):
+        await self.connection.show_select_screen(self.entry)
 
 
 class ThinkCommand(MushCommand):
@@ -108,7 +108,7 @@ class ThinkCommand(MushCommand):
     aliases = ["th", "thi", "thin"]
     help_category = "System"
 
-    def execute(self):
+    async def execute(self):
         if self.args:
             result, remaining, stopped = self.entry.evaluate(self.remaining)
             if result:
@@ -120,14 +120,14 @@ class LogoutCommand(MushCommand):
     aliases = ["@logo", "@logou"]
     help_category = "System"
 
-    def execute(self):
-        self.enactor.logout()
-        self.enactor.show_welcome_screen()
+    async def execute(self):
+        await self.executor.logout(self.entry)
+        await self.executor.show_welcome_screen(self.entry)
 
 
 class OOCPyCommand(PyCommand):
     @classmethod
-    def access(cls, interpreter):
+    async def access(cls, interpreter):
         return interpreter.user.get_alevel() >= 10
 
     def available_vars(self):
@@ -137,7 +137,7 @@ class OOCPyCommand(PyCommand):
 
 
 class SelectCommandMatcher(PythonCommandMatcher):
-    def access(self, enactor):
+    async def access(self, enactor):
         return True
 
     def at_cmdmatcher_creation(self):

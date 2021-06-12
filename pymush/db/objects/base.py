@@ -6,10 +6,9 @@ from typing import Union, Set, Optional, List, Dict, Tuple, Iterable
 
 from athanor.utils import lazy_property, partial_match
 
-from rich.text import Text
-from mudstring.encodings.pennmush import ansi_fun, send_menu
+from mudrich.text import Text
+from mudrich.encodings.pennmush import ansi_fun, send_menu
 
-from pymush.db.scripts import ScriptHandler
 from pymush.utils import formatter as fmt
 from pymush.utils.styling import StyleHandler
 
@@ -66,7 +65,6 @@ class GameObject:
         self.cpu_quota: float = 0.0
         self._admin_level: Optional[int] = None
         self.style_holder: Optional[StyleHandler] = None
-        self.scripts = ScriptHandler(self)
 
     @lazy_property
     def dbref(self):

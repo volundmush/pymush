@@ -1,5 +1,5 @@
 import re
-from rich.text import Text
+from mudrich.text import Text
 from typing import Optional, Union, List, Tuple, Set, Dict
 
 

@@ -1,9 +1,9 @@
 import math
 from typing import Optional
 
-from rich.text import Text
+from mudrich.text import Text
 
-from mudstring.encodings.pennmush import ansi_fun, ansi_fun_style
+from mudrich.encodings.pennmush import ansi_fun, ansi_fun_style
 
 from rich import box, table, columns
 

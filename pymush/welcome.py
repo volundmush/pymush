@@ -1,4 +1,4 @@
-from mudstring.encodings.pennmush import ansi_fun
+from mudrich.encodings.pennmush import ansi_fun
 
 logo = ansi_fun(
     "",

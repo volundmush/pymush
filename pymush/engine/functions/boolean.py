@@ -1,4 +1,4 @@
-from rich.text import Text
+from mudrich.text import Text
 
 from pymush.utils.text import truthy
 
@@ -8,7 +8,7 @@ from .base import BaseFunction
 class _AbstractBoolFunction(BaseFunction):
     help_category = "boolean"
 
-    def do_execute(self):
+    async def do_execute(self):
         return Text("1") if self.math_execute() else Text("0")
 
     def math_execute(self):
@@ -20,7 +20,7 @@ class TFunction(_AbstractBoolFunction):
     exact_args = 1
 
     def math_execute(self):
-        return truthy(self.parser.evaluate(self.args[0]))
+        return truthy(await self.parser.evaluate(self.args[0]))
 
 
 class NotFunction(TFunction):
@@ -35,7 +35,7 @@ class AndFunction(_AbstractBoolFunction):
     min_args = 2
 
     def math_execute(self):
-        return all([truthy(self.parser.evaluate(arg)) for arg in self.args])
+        return all([truthy(await self.parser.evaluate(arg)) for arg in self.args])
 
 
 class CAndFunction(_AbstractBoolFunction):
@@ -45,7 +45,7 @@ class CAndFunction(_AbstractBoolFunction):
     def math_execute(self):
         t = False
         for arg in self.args:
-            t = truthy(self.parser.evaluate(arg))
+            t = truthy(await self.parser.evaluate(arg))
             if not t:
                 return False
         return t
@@ -56,7 +56,7 @@ class OrFunction(_AbstractBoolFunction):
     min_args = 2
 
     def math_execute(self):
-        return any([truthy(self.parser.evaluate(arg)) for arg in self.args])
+        return any([truthy(await self.parser.evaluate(arg)) for arg in self.args])
 
 
 class COrFunction(_AbstractBoolFunction):
@@ -65,6 +65,6 @@ class COrFunction(_AbstractBoolFunction):
 
     def math_execute(self):
         for arg in self.args:
-            if truthy(self.parser.evaluate(arg)):
+            if truthy(await self.parser.evaluate(arg)):
                 return True
         return False

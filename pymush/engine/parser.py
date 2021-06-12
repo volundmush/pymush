@@ -2,7 +2,7 @@ import re
 from typing import Union, Optional
 from enum import IntEnum
 
-from rich.text import Text
+from mudrich.text import Text
 
 from pymush.utils.text import find_notspace, find_matching
 
@@ -198,16 +198,16 @@ class Parser:
     re_inum = re.compile(r"^%i_(?P<num>\d+)", flags=re.IGNORECASE)
     re_numeric = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
-    def __init__(self, entry, enactor, executor, caller, frame=None):
+    def __init__(self, entry, frame):
         self.entry = entry
-        self.frame = StackFrame(enactor, executor, caller) if frame is None else frame
+        self.frame = frame
         self.frame.parser = self
         self.frame.entry = entry
         self.stack = [self.frame]
 
     def make_child(self, **kwargs):
         frame = self.make_child_frame(**kwargs)
-        out = self.__class__(self.entry, None, None, None, frame=frame)
+        out = self.__class__(self.entry, frame)
         return out
 
     def make_child_frame(
@@ -264,7 +264,7 @@ class Parser:
             if self.stack:
                 self.frame = self.stack[-1]
 
-    def evaluate(
+    async def evaluate(
         self,
         text: Union[None, str, Text],
         localize: bool = False,
@@ -362,7 +362,7 @@ class Parser:
                                 func_name = fdict["func"]
                                 bangs = fdict["bangs"]
                                 if (
-                                    func := self.find_function(
+                                    func := await self.find_function(
                                         func_name,
                                         default=NotFoundFunction
                                         if called_recursively
@@ -381,9 +381,9 @@ class Parser:
                                         break
                                     else:
                                         ready_fun = func(
-                                            self, func_name, text[i + 1 : closing]
+                                            self.entry, func_name, text[i + 1 : closing]
                                         )
-                                        output = ready_fun.execute()
+                                        output = await ready_fun.execute()
                                 segment_start = closing + 1
                                 i = closing + 1
                         else:
@@ -499,6 +499,6 @@ class Parser:
 
         return None
 
-    def find_function(self, funcname: str, default=None):
+    async def find_function(self, funcname: str, default=None):
         found = self.entry.queue.game.functions.get(funcname.lower(), None)
         return found if found else default

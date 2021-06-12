@@ -1,7 +1,7 @@
 import datetime
 from .validatorfuncs import _TZ_DICT
 from . import validatorfuncs
-from rich.text import Text as _Text
+from mudrich.text import Text as _Text
 
 
 class _BaseOption:

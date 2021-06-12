@@ -1,4 +1,4 @@
-from rich.text import Text
+from mudrich.text import Text
 
 from pymush.utils.text import case_match
 from pymush.db.attributes import AttributeRequest, AttributeRequestType
@@ -9,9 +9,9 @@ class SetRFunction(BaseFunction):
     name = "setr"
     exact_args = 2
 
-    def do_execute(self):
-        reg_name = self.parser.evaluate(self.args[0])
-        value = self.parser.evaluate(self.args[1])
+    async def do_execute(self):
+        reg_name = await self.parser.evaluate(self.args[0])
+        value = await self.parser.evaluate(self.args[1])
 
         reg_name = reg_name.plain.strip()
         if reg_name.isdigit():
@@ -24,8 +24,8 @@ class SetRFunction(BaseFunction):
 class SetQFunction(SetRFunction):
     name = "setq"
 
-    def do_execute(self):
-        super().do_execute()
+    async def do_execute(self):
+        await super().do_execute()
         return Text("")
 
 
@@ -33,7 +33,7 @@ class ListQFunction(BaseFunction):
     name = "listq"
     exact_args = 1
 
-    def do_execute(self):
+    async def do_execute(self):
         vars = " ".join([str(key) for key in self.parser.frame.vars.keys()])
         return Text(vars)
 
@@ -43,12 +43,12 @@ class IfFunction(BaseFunction):
     min_args = 1
     max_args = 3
 
-    def do_execute(self):
-        if self.parser.truthy(self.parser.evaluate(self.args[0])):
-            return self.parser.evaluate(self.args[1])
+    async def do_execute(self):
+        if self.parser.truthy(await self.parser.evaluate(self.args[0])):
+            return await self.parser.evaluate(self.args[1])
         else:
             if len(self.args) == 3:
-                return self.parser.evaluate(self.args[2])
+                return await self.parser.evaluate(self.args[2])
             else:
                 return Text("")
 
@@ -62,19 +62,19 @@ class IterFunction(BaseFunction):
         super().__init__(parser, called_as, args_data)
         self.ibreak = False
 
-    def do_execute(self):
+    async def do_execute(self):
         out = list()
         delim = " "
         out_delim = Text(" ")
         if self.args_count >= 3:
-            delim = self.parser.evaluate(self.args[2])
+            delim = await self.parser.evaluate(self.args[2])
         if self.args_count == 4:
-            out_delim = self.parser.evaluate(self.args[3])
+            out_delim = await self.parser.evaluate(self.args[3])
 
-        elements = self.split_by(self.parser.evaluate(self.args[0]), delim)
+        elements = self.split_by(await self.parser.evaluate(self.args[0]), delim)
 
         for i, elem in enumerate(elements):
-            out.append(self.parser.evaluate(self.args[1], iter=self, inum=i, ivar=elem))
+            out.append(await self.parser.evaluate(self.args[1], iter=self, inum=i, ivar=elem))
             if self.ibreak:
                 break
 
@@ -85,10 +85,10 @@ class IBreakFunction(BaseFunction):
     name = "ibreak"
     exact_args = 1
 
-    def do_execute(self):
+    async def do_execute(self):
         if not self.parser.frame.iter:
             return Text("#-1 ARGUMENT OUT OF RANGE")
-        arg = self.parser.evaluate(self.args[0])
+        arg = await self.parser.evaluate(self.args[0])
         if arg:
             num = self.parser.to_number(arg)
             if num is not None:
@@ -108,18 +108,18 @@ class SwitchFunction(BaseFunction):
     name = "switch"
     min_args = 3
 
-    def do_execute(self):
-        matcher = self.parser.evaluate(self.args[0])
+    async def do_execute(self):
+        matcher = await self.parser.evaluate(self.args[0])
         if len(self.args[1:]) % 2 == 0:
             default = Text("")
             args = self.args[1:]
         else:
-            default = self.parser.evaluate(self.args[-1], stext=matcher)
+            default = await self.parser.evaluate(self.args[-1], stext=matcher)
             args = self.args[1:-1]
 
         for case, outcome in zip(args[0::2], args[1::2]):
-            if case_match(matcher, self.parser.evaluate(case, stext=matcher)):
-                return self.parser.evaluate(outcome, stext=matcher)
+            if case_match(matcher, await self.parser.evaluate(case, stext=matcher)):
+                return await self.parser.evaluate(outcome, stext=matcher)
         return default
 
 
@@ -127,8 +127,8 @@ class UFunction(BaseFunction):
     name = "u"
     min_args = 1
 
-    def do_execute(self):
-        obj, attr_name, err = self.target_obj_attr(self.parser.evaluate(self.args[0]))
+    async def do_execute(self):
+        obj, attr_name, err = self.target_obj_attr(await self.parser.evaluate(self.args[0]))
         if err:
             return Text("#-1 UNABLE TO LOCATE OBJECT")
 
@@ -136,12 +136,8 @@ class UFunction(BaseFunction):
         if req.error:
             return req.error
         code = req.value
-        print(f"CODE IS: {code}")
+        number_args = [await self.parser.evaluate(arg) for arg in self.args[1:]]
 
-        number_args = [self.parser.evaluate(arg) for arg in self.args[1:]]
-
-        print(f"NUMBER ARGS is: {number_args}")
-
-        return self.parser.evaluate(
+        return await self.parser.evaluate(
             code, number_args=number_args, executor=obj, caller=self.executor
         )

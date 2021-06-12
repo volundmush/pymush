@@ -3,12 +3,12 @@ import weakref
 
 from typing import Optional, Set, List, Tuple
 
-from rich.console import Console
-from rich.color import ColorSystem
-from rich.console import _null_highlighter
-from rich.traceback import Traceback
-from rich.box import ASCII
-from rich.text import Text
+from mudrich.console import Console
+from mudrich.color import ColorSystem
+from mudrich.console import _null_highlighter
+from mudrich.traceback import Traceback
+from mudrich.box import ASCII
+from mudrich.text import Text
 
 from athanor.shared import (
     ConnectionDetails,
@@ -132,12 +132,12 @@ class Connection(BaseConnection):
     def receive_msg(self, message: fmt.FormatList):
         message.send(self)
 
-    def create_user(self, name: str, password: str) -> Tuple[bool, Optional[Text]]:
+    async def create_user(self, entry: "QueueEntry", name: str, password: str) -> Tuple[bool, Optional[Text]]:
         pass_hash = self.game.crypt_con.hash(password)
-        user, error = self.game.create_object("USER", name)
+        user, error = await self.game.create_object(entry, "USER", name)
         if error:
             return False, Text(error)
-        user.password = pass_hash
+        await user.change_password(pass_hash, nohash=True)
 
         cmd = (
             f'connect "{user.name}" <password>'
@@ -146,94 +146,94 @@ class Connection(BaseConnection):
         )
         self.msg(text="User Account created! You can login with " + ansi_fun("hw", cmd))
 
-    def check_login(self, name: str, password: str) -> Tuple[bool, Optional[Text]]:
+    async def check_login(self, entry: "QueueEntry", name: str, password: str) -> Tuple[bool, Optional[Text]]:
         candidates = self.game.type_index["USER"]
-        user, error = self.game.search_objects(name, candidates=candidates, exact=True)
+        user, error = await self.game.search_objects(entry, name, candidates=candidates, exact=True)
         if error:
             return False, Text("Sorry, that was an incorrect username or password.")
         if not user:
             return False, Text("Sorry, that was an incorrect username or password.")
-        if not user.check_password(password):
+        if not await user.check_password(password):
             return False, Text("Sorry, that was an incorrect username or password.")
-        self.login(user)
+        await self.login(entry, user)
         return True, None
 
-    def login(self, user: "GameObject"):
+    async def login(self, entry: "QueueEntry", user: "GameObject"):
         self.user = user
         user.last_login = time.time()
         user.connections.add(self)
-        self.show_select_screen()
+        await self.show_select_screen(entry)
         if len(user.connections) == 1:
-            user.on_first_connection_login(self)
-        user.on_connection_login(self)
+            await user.on_first_connection_login(entry, self)
+        await user.on_connection_login(entry, self)
 
-    def show_select_screen(self):
+    async def show_select_screen(self, entry: "QueueEntry"):
         self.receive_msg(render_select_screen(self))
 
-    def terminate(self):
+    async def terminate(self, entry: "QueueEntry"):
         if self.session:
-            self.leave_session()
+            await self.leave_session(entry)
         if self.user:
-            self.logout()
+            await self.logout(entry)
         self.disconnect = True
 
-    def logout(self):
+    async def logout(self, entry: "QueueEntry"):
         user = self.user
         if user:
             self.user = None
             user.connections.remove(self)
-            user.on_connection_logout(self)
+            await user.on_connection_logout(entry, self)
             if not user.connections:
-                user.on_final_connection_logout(self)
+                await user.on_final_connection_logout(entry, self)
 
-    def leave_session(self):
+    async def leave_session(self, entry: "QueueEntry"):
         if not self.session:
             return
         session = self.session
         session.connections.remove(self)
-        session.on_connection_leave(self)
+        await session.on_connection_leave(entry, self)
         if not session.connections:
-            session.on_final_connection_leave(self)
+            await session.on_final_connection_leave(entry, self)
         self.session = None
 
-    def join_session(self, session: "GameSession"):
+    async def join_session(self, entry: "QueueEntry", session: "GameSession"):
         session.connections.add(self)
         self.session = session
         if len(session.connections) == 1:
-            session.on_first_connection(self)
-        self.on_join_session(session)
+            await session.on_first_connection(entry, self)
+        await self.on_join_session(entry, session)
 
-    def on_join_session(self, session: "GameSession"):
+    async def on_join_session(self, entry: "QueueEntry", session: "GameSession"):
         entry = QueueEntry.from_ic(self.session, "look", self)
         self.game.queue.push(entry)
 
-    def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
+    async def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
         for matcher_name in matcher_categories:
             matchers = self.game.command_matchers.get(matcher_name, list())
             for matcher in matchers:
-                if matcher and matcher.access(entry):
-                    cmd = matcher.match(entry, cmd_text)
+                if matcher and await matcher.access(entry):
+                    cmd = await matcher.match(entry, cmd_text)
                     if cmd:
                         return cmd
 
-    def _gather_help(self, entry, data, matcher_categories):
+    async def _gather_help(self, entry, data, matcher_categories):
         for matcher_name in matcher_categories:
             matchers = self.game.command_matchers.get(matcher_name, list())
             for matcher in matchers:
-                if matcher and matcher.access(entry):
-                    matcher.populate_help(entry, data)
+                if matcher and await matcher.access(entry):
+                    await matcher.populate_help(entry, data)
 
-    def find_login_cmd(self, entry: "QueueEntry", cmd_text: str):
+    async def find_login_cmd(self, entry: "QueueEntry", cmd_text: str):
         return self._find_cmd(entry, cmd_text, self.login_matchers)
 
-    def find_selectscreen_cmd(self, entry: "QueueEntry", cmd_text: str):
+    async def find_selectscreen_cmd(self, entry: "QueueEntry", cmd_text: str):
         return self._find_cmd(entry, cmd_text, self.select_matchers)
 
-    def gather_login_help(self, entry: "QueueEntry", data):
-        self._gather_help(entry, data, self.login_matchers)
+    async def gather_login_help(self, entry: "QueueEntry", data):
+        await self._gather_help(entry, data, self.login_matchers)
 
-    def gather_selectscreen_help(self, entry: "QueueEntry", data):
-        self._gather_help(entry, data, self.select_matchers)
+    async def gather_selectscreen_help(self, entry: "QueueEntry", data):
+        await self._gather_help(entry, data, self.select_matchers)
 
 
 class PromptHandler:
@@ -306,8 +306,8 @@ class GameSession:
     def receive_msg(self, message: fmt.FormatList):
         self.prompt.last_activity = time.time()
 
-    def on_first_connection(self, connection: "Connection"):
-        self.puppet.announce_login(from_linkdead=self.linkdead)
+    async def on_first_connection(self, entry: "QueueEntry", connection: "Connection"):
+        await self.puppet.announce_login(entry, from_linkdead=self.linkdead)
         self.linkdead = False
 
     def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
@@ -339,32 +339,32 @@ class GameSession:
     def update(self, now: float, delta: float):
         self.prompt.update(now, delta)
 
-    def on_connection_leave(self, connection: Connection):
+    async def on_connection_leave(self, entry: "QueueEntry", connection: Connection):
         pass
 
-    def on_final_connection_leave(self, connection: Connection):
+    async def on_final_connection_leave(self, entry: "QueueEntry", connection: Connection):
         if self.ending_safely:
-            self.cleanup()
+            await self.cleanup(entry)
         else:
             self.linkdead = True
-            self.puppet.announce_linkdead()
+            await self.puppet.announce_linkdead(entry)
 
-    def cleanup(self):
+    async def cleanup(self, entry: "QueueEntry"):
         self.puppet.session = None
         if self.character.session:
             self.character.session = None
         self.user.account_sessions.remove(self)
-        self.puppet.announce_logout(from_linkdead=self.linkdead)
+        await self.puppet.announce_logout(entry, from_linkdead=self.linkdead)
 
     def can_end_safely(self):
         return True, None
 
-    def end_safely(self):
+    async def end_safely(self, entry: "QueueEntry"):
         self.ending_safely = True
         conns = list(self.connections)
         for conn in conns:
-            conn.leave_session()
-            conn.show_select_screen()
+            await conn.leave_session(entry)
+            await conn.show_select_screen(entry)
         self.user.game.sessions.pop(self.character.dbid, None)
 
     def see_tracebacks(self):

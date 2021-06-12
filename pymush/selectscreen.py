@@ -1,4 +1,4 @@
-from mudstring.encodings.pennmush import ansi_fun, send_menu, ansify, ansi_fun_style
+from mudrich.encodings.pennmush import ansi_fun, send_menu, ansify, ansi_fun_style
 from .utils import formatter as fmt
 
 

@@ -6,7 +6,7 @@ from typing import Union, List, Optional
 from functools import reduce
 from scipy import stats
 
-from rich.text import Text
+from mudrich.text import Text
 from pymush.utils.text import truthy, to_number
 from .base import BaseFunction
 
@@ -14,7 +14,7 @@ from .base import BaseFunction
 class _MathFunction(BaseFunction):
     help_category = "math"
 
-    def do_execute(self):
+    async def do_execute(self):
         try:
             result = self.math_execute()
         except ValueError as err:
@@ -62,7 +62,7 @@ class AbsFunction(_MathFunction):
     exact_args = 1
 
     def math_execute(self):
-        if (num := to_number(self.parser.evaluate(self.args[0]))) is None:
+        if (num := to_number(await self.parser.evaluate(self.args[0]))) is None:
             raise ValueError("#-1 ARGUMENT MUST BE NUMBER")
         return abs(num)
 
@@ -290,15 +290,15 @@ class LMathFunction(_MathFunction):
     }
 
     def math_execute(self):
-        op = self.parser.evaluate(self.args[0]).plain.lower()
+        op = await self.parser.evaluate(self.args[0]).plain.lower()
         func = self.ops.get(op, None)
         if not func:
             raise ValueError(f"#-1 UNSUPPORTED OPERATION ({op})")
 
-        delim = self.parser.evaluate(self.args[2]) if len(self.args) == 3 else Text(" ")
+        delim = await self.parser.evaluate(self.args[2]) if len(self.args) == 3 else Text(" ")
         print(self.args)
         out_vals = self.list_to_numbers(
-            self.parser.evaluate(self.args[1]).split(delim.plain)
+            await self.parser.evaluate(self.args[1]).split(delim.plain)
         )
         return func(out_vals)
 

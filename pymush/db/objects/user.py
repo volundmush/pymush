@@ -43,12 +43,12 @@ class User(GameObject):
         else:
             self.sys_attributes.pop("password", None)
 
-    def change_password(self, text, nohash=False):
+    async def change_password(self, text, nohash=False):
         if not nohash:
             text = self.game.crypt_con.hash(text)
         self.password = text
 
-    def check_password(self, text):
+    async def check_password(self, text):
         hash = self.password
         if not hash:
             return False
@@ -85,16 +85,16 @@ class User(GameObject):
         else:
             self.sys_attributes.pop("characters", None)
 
-    def on_connection_logout(self, connection: "Connection", interpreter: "Interpreter"):
+    async def on_connection_logout(self, entry: "QueueEntry", connection: "Connection"):
         pass
 
-    def on_final_connection_logout(self, connection: "Connection", interpreter: "Interpreter"):
+    async def on_final_connection_logout(self, entry: "QueueEntry", connection: "Connection"):
         pass
 
-    def on_first_connection_login(self, connection: "Connection", interpreter: "Interpreter"):
+    async def on_first_connection_login(self, entry: "QueueEntry", connection: "Connection"):
         pass
 
-    def on_connection_login(self, connection: "Connection", interpreter: "Interpreter"):
+    async def on_connection_login(self, entry: "QueueEntry", connection: "Connection"):
         pass
 
     def max_sessions(self):

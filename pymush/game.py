@@ -7,7 +7,7 @@ from collections import OrderedDict, defaultdict
 
 from passlib.context import CryptContext
 
-from rich.text import Text
+from mudrich.text import Text
 
 from athanor.app import Service
 from athanor.utils import import_from_module
@@ -114,8 +114,9 @@ class GameService(Service):
         else:
             return None, "Invalid dbref!"
 
-    def create_object(
+    async def create_object(
         self,
+        entry: "QueueEntry",
         type_name: str,
         name: str,
         dbid: Optional[int] = None,
@@ -146,7 +147,7 @@ class GameService(Service):
         if namespace:
             namespace = self.resolve_object(namespace)
         if namespace:
-            found, err = self.search_objects(
+            found, err = await self.search_objects(entry,
                 name, namespace.namespaces[type_name], exact=True, aliases=True
             )
             if found:
@@ -169,7 +170,7 @@ class GameService(Service):
                 raise ValueError("All non-root_owner objects must have an Owner!")
 
         if obj_class.unique_names:
-            found, err = self.search_objects(
+            found, err = await self.search_objects(entry,
                 name, self.type_index[type_name], exact=True, aliases=True
             )
             if found:
@@ -206,7 +207,7 @@ class GameService(Service):
         self.db_objects[obj.dbref] = obj
         self.db_objects[obj.objid] = obj
 
-    def search_objects(
+    async def search_objects(entry: "QueueEntry",
         self, name, candidates: Optional[Iterable] = None, exact=False, aliases=False
     ):
         if candidates is None:
@@ -221,14 +222,14 @@ class GameService(Service):
                 return found, None
         return None, f"Sorry, nothing matches: {name}"
 
-    def create_or_join_session(self, connection: "Connection", character: "GameObject"):
+    async def create_or_join_session(self, entry: "QueueEntry", connection: "Connection", character: "GameObject"):
         if not (sess := self.sessions.get(character.dbid, None)):
             if len(connection.user.account_sessions) > connection.user.max_sessions():
                 return "Too many Sessions already in play for this User Account!"
             sess = self.app.classes["game"]["gamesession"](connection.user, character)
             self.sessions[character.dbid] = sess
             connection.user.account_sessions.add(sess)
-        connection.join_session(sess)
+        await connection.join_session(entry, sess)
 
     def update(self, now: float, delta: float):
         for obj in self.update_subscribers:
@@ -256,7 +257,3 @@ class GameService(Service):
         if type_name in self.app.config.game_options["type_alevel"]:
             return self.app.config.game_options["type_alevel"][type_name]
         return self.app.config.game_options["default_alevel"]
-
-    @property
-    def interpreter(self):
-        return self.queue.interpreter

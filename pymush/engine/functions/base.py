@@ -1,6 +1,6 @@
 from typing import Union, Iterable, List
 
-from rich.text import Text
+from mudrich.text import Text
 
 from pymush.utils.text import to_number
 from pymush.utils import formatter as fmt
@@ -18,8 +18,8 @@ class BaseFunction(BaseApi):
     eval_args = True
     help_category = None
 
-    def __init__(self, parser, called_as: str, args_data: Text):
-        self.parser = parser
+    def __init__(self, entry, called_as: str, args_data: Text):
+        self.entry = entry
         self.called_as = called_as
         self.args_data = args_data
         self.args = list()
@@ -113,7 +113,7 @@ class BaseFunction(BaseApi):
             for _ in range(diff):
                 self.args.append(Text(""))
 
-    def execute(self):
+    async def execute(self):
         self.split_args()
         c = self.args_count
         if self.exact_args is not None and c != self.exact_args:
@@ -126,9 +126,9 @@ class BaseFunction(BaseApi):
             return self._err_uneven_args(c)
         if self.odd_args and c % 2 == 0:
             return self._err_even_args(c)
-        return self.do_execute()
+        return await self.do_execute()
 
-    def do_execute(self):
+    async def do_execute(self):
         return Text(f"#-1 FUNCTION {self.name.upper()} IS NOT IMPLEMENTED")
 
     def join_by(self, lines: Iterable[Text], delim: Text):
@@ -143,7 +143,7 @@ class BaseFunction(BaseApi):
     def list_to_numbers(self, numbers: Iterable[Text]) -> List[Union[float, int]]:
         out_vals = list()
         for arg in numbers:
-            num = to_number(self.parser.evaluate(arg))
+            num = to_number(await self.parser.evaluate(arg))
             if num is None:
                 raise ValueError("#-1 ARGUMENTS MUST BE NUMBERS")
             out_vals.append(num)
@@ -151,5 +151,5 @@ class BaseFunction(BaseApi):
 
 
 class NotFound(BaseFunction):
-    def execute(self):
+    async def execute(self):
         return Text(f"#-1 FUNCTION ({self.called_as.upper()}) NOT FOUND")

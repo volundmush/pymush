@@ -2,7 +2,7 @@ import re
 
 from typing import Union, Optional, Tuple, List
 
-from rich.text import Text
+from mudrich.text import Text
 
 from pymush.utils import formatter as fmt
 from ..api import BaseApi
@@ -17,16 +17,8 @@ class Command(BaseApi):
     aliases = []
     help_category = None
 
-    @property
-    def session(self):
-        return self.interpreter.session
-
-    @property
-    def connection(self):
-        return self.interpreter.connection
-
     @classmethod
-    def access(cls, interpreter: "Interpreter"):
+    def access(cls, entry: "QueueEntry"):
         """
         This returns true if <enactor> is able to see and use this command.
 
@@ -36,22 +28,22 @@ class Command(BaseApi):
         return True
 
     @classmethod
-    def help(cls, interpreter):
+    def help(cls, entry: "QueueEntry"):
         """
         This is called by the command-help system if help is called on this command.
         """
-        enactor = interpreter.frame.enactor
+        executor = entry.executor
         if cls.__doc__:
-            out = fmt.FormatList(enactor)
+            out = fmt.FormatList(executor)
             out.add(fmt.Header(f"Help: {cls.name}"))
             out.add(fmt.Line(cls.__doc__))
             out.add(fmt.Footer())
-            enactor.send(out)
+            executor.send(out)
         else:
-            enactor.msg(text="Help is not implemented for this command.")
+            executor.msg(text="Help is not implemented for this command.")
 
     @classmethod
-    def match(cls, enactor, text: Text):
+    def match(cls, entry: "QueueEntry", text: Text):
         """
         Called by the CommandGroup to determine if this command matches.
         Returns False or a Regex Match object.
@@ -62,30 +54,26 @@ class Command(BaseApi):
         if (result := cls.re_match.fullmatch(text.plain)) :
             return result
 
-    def __init__(self, interpreter, text, match_obj):
+    def __init__(self, entry: "QueueEntry", text: Text, match_obj):
         """
         Instantiates the command.
         """
         self.text = text
         self.match_obj = match_obj
-        self.interpreter = interpreter
+        self.entry = entry
 
     def split_args(self, text: Union[str, Text]):
         return self.split_cmd_args(text)
 
-    @property
-    def parser(self):
-        return self.interpreter.parser
-
-    def execute(self):
+    async def execute(self):
         """
         Do whatever the command does.
         """
 
-    def at_pre_execute(self):
+    async def at_pre_execute(self):
         pass
 
-    def at_post_execute(self):
+    async def at_post_execute(self):
         pass
 
     def __repr__(self):
@@ -95,7 +83,7 @@ class Command(BaseApi):
 class MushCommand(Command):
     available_switches = []
 
-    def at_pre_execute(self):
+    async def at_pre_execute(self):
         for sw in self.switches:
             if sw not in self.available_switches:
                 raise CommandException(
@@ -124,8 +112,8 @@ class MushCommand(Command):
         if (result := matcher.fullmatch(text.plain)) :
             return result
 
-    def __init__(self, interpreter, text, match_obj):
-        super().__init__(interpreter, text, match_obj)
+    def __init__(self, entry, text, match_obj):
+        super().__init__(entry, text, match_obj)
         self.mdict = self.match_obj.groupdict()
         self.cmd = text[match_obj.start("cmd") : match_obj.end("cmd")]
         self.args = text[match_obj.start("args") : match_obj.end("args")]
@@ -147,7 +135,7 @@ class BaseCommandMatcher:
         self.at_cmdmatcher_creation()
 
     @classmethod
-    def access(self, interpreter: "Interpreter"):
+    async def access(cls, entry: "QueueEntry"):
         return True
 
     def at_cmdmatcher_creation(self):
@@ -157,10 +145,10 @@ class BaseCommandMatcher:
         """
         pass
 
-    def match(self, interpreter: "Interpreter", text: Text):
+    async def match(self, entry: "QueueEntry", text: Text):
         pass
 
-    def populate_help(self, interpreter: "Interpreter", data):
+    async def populate_help(self, entry: "QueueEntry", data):
         pass
 
     def __repr__(self):
@@ -175,12 +163,12 @@ class PythonCommandMatcher(BaseCommandMatcher):
     def add(self, cmd_class):
         self.cmds.add(cmd_class)
 
-    def match(self, interpreter: "Interpreter", text: Text):
+    async def match(self, entry: "QueueEntry", text: Text):
         for cmd in self.cmds:
-            if cmd.access(interpreter) and (result := cmd.match(interpreter, text)):
-                return cmd(interpreter, text, result)
+            if await cmd.access(entry) and (result := cmd.match(entry, text)):
+                return cmd(entry, text, result)
 
-    def populate_help(self, interpreter: "Interpreter", data):
+    async def populate_help(self, entry: "QueueEntry", data):
         for cmd in self.cmds:
-            if cmd.help_category and cmd.access(interpreter):
+            if cmd.help_category and await cmd.access(entry):
                 data[cmd.help_category].add(cmd)

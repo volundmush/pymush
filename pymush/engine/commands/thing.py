@@ -57,7 +57,7 @@ class ThinkCommand(MushCommand):
     help_category = "Misc"
 
     def execute(self):
-        self.enactor.msg(self.parser.evaluate(self.args))
+        self.enactor.msg(await self.parser.evaluate(self.args))
 
 
 class ThingCommandMatcher(PythonCommandMatcher):

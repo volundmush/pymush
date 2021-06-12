@@ -3,12 +3,12 @@ import sys
 import time
 import traceback
 
-from mudstring.encodings.pennmush import send_menu, ansi_fun
+from mudrich.encodings.pennmush import send_menu, ansi_fun
 
 from athanor.utils import partial_match
 
 from pymush.utils import formatter as fmt
-from rich.traceback import Traceback
+from mudrich.traceback import Traceback
 
 from .base import Command, MushCommand, CommandException, PythonCommandMatcher
 

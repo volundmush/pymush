@@ -1,6 +1,6 @@
 import weakref
 
-from rich.text import Text
+from mudrich.text import Text
 from typing import Iterable
 
 from pymush.engine.cmdqueue import BreakQueueException, QueueEntryType
@@ -31,7 +31,7 @@ class DoListCommand(_ScriptCommand):
         if "inplace" in self.switches:
             self.switches.update({"inline", "nobreak", "localize"})
 
-        lsargs = self.parser.evaluate(lsargs)
+        lsargs = await self.parser.evaluate(lsargs)
 
         if "delimit" in self.switches:
             delim, _ = lsargs.plain.split(" ", 1)
@@ -65,7 +65,7 @@ class AssertCommand(_ScriptCommand):
 
     def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
-        if not self.parser.truthy(self.parser.evaluate(lsargs)):
+        if not self.parser.truthy(await self.parser.evaluate(lsargs)):
             if rsargs:
                 if "queued" in self.switches:
                     self.entry.spawn_action_list(rsargs)
@@ -81,7 +81,7 @@ class BreakCommand(_ScriptCommand):
 
     def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
-        if self.parser.truthy(self.parser.evaluate(lsargs)):
+        if self.parser.truthy(await self.parser.evaluate(lsargs)):
             if rsargs:
                 if "queued" in self.switches:
                     self.entry.spawn_action_list(rsargs)
@@ -103,7 +103,7 @@ class IncludeCommand(_ScriptCommand):
     def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
         obj, attr_name, err = self.target_obj_attr(
-            self.parser.evaluate(lsargs), default=self.executor
+            await self.parser.evaluate(lsargs), default=self.executor
         )
         if err:
             self.executor.msg(Text(err))
@@ -115,7 +115,7 @@ class IncludeCommand(_ScriptCommand):
                 f"{self.name} cannot use that attribute. Is it accessible, and an action list?"
             )
 
-        number_args = [self.parser.evaluate(arg) for arg in self.split_args(rsargs)]
+        number_args = [await self.parser.evaluate(arg) for arg in self.split_args(rsargs)]
         inter = self.interpreter.make_child(actions, split=True)
         inter.execute(number_args=number_args, nobreak="nobreak" in self.switches)
 
@@ -127,7 +127,7 @@ class SwitchCommand(_ScriptCommand):
 
     def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
-        matcher = self.parser.evaluate(lsargs)
+        matcher = await self.parser.evaluate(lsargs)
         s_rsargs = self.split_args(rsargs)
 
         actions = list()
@@ -141,7 +141,7 @@ class SwitchCommand(_ScriptCommand):
         stop_first = "all" not in self.switches
 
         for case, outcome in zip(args[0::2], args[1::2]):
-            if case_match(matcher, self.parser.evaluate(case, stext=matcher)):
+            if case_match(matcher, await self.parser.evaluate(case, stext=matcher)):
                 actions.append(outcome)
                 if stop_first:
                     break
@@ -171,13 +171,13 @@ class SetCommand(_ScriptCommand):
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(
-            name=self.parser.evaluate(lsargs), first_only=True
+            name=await self.parser.evaluate(lsargs), first_only=True
         )
         if err:
             self.executor.msg(err)
             return
         obj = obj[0]
-        to_set = self.parser.evaluate(rsargs)
+        to_set = await self.parser.evaluate(rsargs)
 
         idx = to_set.find(":")
         if idx == -1:
@@ -216,13 +216,13 @@ class PemitCommand(_EmitCommand):
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(
-            name=self.parser.evaluate(lsargs), first_only=True
+            name=await self.parser.evaluate(lsargs), first_only=True
         )
         if err:
             self.executor.msg(err)
             return
         obj = obj[0]
-        self.send_to_targets([obj], self.parser.evaluate(rsargs))
+        self.send_to_targets([obj], await self.parser.evaluate(rsargs))
 
 
 class RemitCommand(_EmitCommand):
@@ -233,7 +233,7 @@ class RemitCommand(_EmitCommand):
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(
-            name=self.parser.evaluate(lsargs), first_only=True
+            name=await self.parser.evaluate(lsargs), first_only=True
         )
         if err:
             self.executor.msg(err)
@@ -244,7 +244,7 @@ class RemitCommand(_EmitCommand):
         targets.update(obj.contents)
         targets.update(obj.namespaces['EXIT'])
 
-        self.send_to_targets(targets, self.parser.evaluate(rsargs))
+        self.send_to_targets(targets, await self.parser.evaluate(rsargs))
 
 
 class OemitCommand(_EmitCommand):
@@ -255,7 +255,7 @@ class OemitCommand(_EmitCommand):
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(
-            name=self.parser.evaluate(lsargs), first_only=True
+            name=await self.parser.evaluate(lsargs), first_only=True
         )
         if err:
             self.executor.msg(err)
@@ -267,7 +267,7 @@ class OemitCommand(_EmitCommand):
             self.executor.msg("Nothing would hear it.")
             return
 
-        self.send_to_targets(obj.neighbors(include_exits=True), self.parser.evaluate(rsargs))
+        self.send_to_targets(obj.neighbors(include_exits=True), await self.parser.evaluate(rsargs))
 
 
 class EmitCommand(_EmitCommand):
@@ -279,7 +279,7 @@ class EmitCommand(_EmitCommand):
         targets = obj.neighbors(include_exits=True)
         targets.add(obj)
 
-        self.send_to_targets(targets, self.parser.evaluate(self.args))
+        self.send_to_targets(targets, await self.parser.evaluate(self.args))
 
 
 class ScriptCommandMatcher(PythonCommandMatcher):

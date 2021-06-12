@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Union, List, Dict, Set
 from enum import IntEnum
 
-from rich.text import Text
+from mudrich.text import Text
 
 
 @dataclass
@@ -89,7 +89,7 @@ class AttributeRequest:
     accessor: "GameObject"
     req_type: AttributeRequestType
     name: Union[str, Text]
-    parser: "Parser"
+    entry: "QueueEntry"
     value: Optional[Union[str, Text]] = None
     attr_base: Optional[Attribute] = None
     attr: Optional[AttributeValue] = None
@@ -191,7 +191,7 @@ class AttributeHandler:
             self.attributes[attr_base] = attr
         return
 
-    def api_request(self, request: AttributeRequest):
+    async def api_request(self, request: AttributeRequest):
         if not self.api_access(request):
             request.error = Text("PERMISSION DENIED FOR ATTRIBUTES")
             return

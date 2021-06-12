@@ -1,6 +1,6 @@
 athanor
 mudstring
-rich
+mudrich
 passlib
 argon2_cffi
 pytz
