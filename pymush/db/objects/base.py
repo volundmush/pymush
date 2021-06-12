@@ -2,7 +2,7 @@ import sys
 import weakref
 
 from collections import defaultdict
-from typing import Union, Set, Optional, List, Dict
+from typing import Union, Set, Optional, List, Dict, Tuple, Iterable
 
 from athanor.utils import lazy_property, partial_match
 
@@ -436,6 +436,40 @@ class GameObject:
             return [self.session]
         return []
 
+    def can_receive_text(self, sender: "GameObject", interpreter: "Interpreter", text: Text, **kwargs) -> Tuple[bool, Optional[str]]:
+        """
+        Called by most @*emit commands and *emit() functions to check if sender can speak with this Object.
+
+        Overload this to implement permissions checks.
+
+        Args:
+            sender (GameObject): The sender of the message.
+            interpreter (Interpreter): The interpreter object of the moment.
+            text (Text): The Text object that sender wishes self to receive.
+            **kwargs: Arbitrary data for overloading.
+
+        Returns:
+            yes_or_no: bool, err: str or None
+        """
+        return True, None
+
+    def receive_text(self, sender: "GameObject", interpreter: "Interpreter", text: Text, **kwargs):
+        """
+        Called by most @*emit commands and *emit() functions to handling receiving a message from sender.
+
+        Overload this to implement LISTEN and similar MUSH features. Firing off events when <self> receives
+        specific text patterns.
+
+        Args:
+            sender (GameObject): The sender of the message.
+            interpreter (Interpreter): The interpreter object of the moment.
+            text (Text): The Text object that sender wishes self to receive.
+            **kwargs: Arbitrary data for overloading.
+        """
+        flist = fmt.FormatList(sender, **kwargs)
+        flist.add(fmt.Line(text))
+        self.send(flist)
+
     def msg(self, text, **kwargs):
         flist = fmt.FormatList(self, **kwargs)
         flist.add(fmt.Line(text))
@@ -796,3 +830,40 @@ class GameObject:
 
     def active(self):
         return True
+
+    def neighbors(self, include_exits=False) -> Iterable["GameObject"]:
+        out = weakref.WeakSet()
+        if self.location:
+            out.update(self.location.contents)
+            if include_exits:
+                out.update(self.location.namespaces['EXIT'])
+        out.remove(self)
+        return out
+
+    def announce_login(self, from_linkdead: bool = False):
+        if from_linkdead:
+            self.msg(Text("You return from link-dead!"))
+            to_send = Text(" is no longer link-dead!")
+            for neighbor in self.neighbors():
+                neighbor.msg(neighbor.get_dub_or_keyphrase_for(self) + to_send)
+        else:
+            self.msg(Text("You have entered the game."))
+            to_send = Text(" has entered the game!")
+            for neighbor in self.neighbors():
+                neighbor.msg(neighbor.get_dub_or_keyphrase_for(self) + to_send)
+
+    def announce_linkdead(self):
+        to_send = Text(" has gone link-dead!")
+        for neighbor in self.neighbors():
+            neighbor.msg(neighbor.get_dub_or_keyphrase_for(self) + to_send)
+
+    def announce_logout(self, from_linkdead: bool = False):
+        if from_linkdead:
+            to_send = Text(" has been idled-out due to link-deadedness!")
+            for neighbor in self.neighbors():
+                neighbor.msg(neighbor.get_dub_or_keyphrase_for(self) + to_send)
+        else:
+            self.msg(Text("You have left the game."))
+            to_send = Text(" has left the game!")
+            for neighbor in self.neighbors():
+                neighbor.msg(neighbor.get_dub_or_keyphrase_for(self) + to_send)

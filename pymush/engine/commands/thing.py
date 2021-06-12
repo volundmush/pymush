@@ -57,7 +57,7 @@ class ThinkCommand(MushCommand):
     help_category = "Misc"
 
     def execute(self):
-        self.entry.enactor.msg(self.parser.evaluate(self.args))
+        self.enactor.msg(self.parser.evaluate(self.args))
 
 
 class ThingCommandMatcher(PythonCommandMatcher):
@@ -80,25 +80,25 @@ class ExitCommand(Command):
 
         out_here = fmt.FormatList(ex)
         out_here.add(
-            fmt.Line(f"{self.entry.enactor.name} heads over to {des[0].name}.")
+            fmt.Line(f"{self.enactor.name} heads over to {des[0].name}.")
         )
 
         out_there = fmt.FormatList(ex)
-        loc = self.entry.enactor.location
+        loc = self.enactor.location
 
         if not loc:
             out_there.add(
-                fmt.Line(f"{self.entry.enactor.name} arrives from somewhere...")
+                fmt.Line(f"{self.enactor.name} arrives from somewhere...")
             )
         else:
             out_there.add(
-                fmt.Line(f"{self.entry.enactor.name} arrives from {loc[0].name}")
+                fmt.Line(f"{self.enactor.name} arrives from {loc[0].name}")
             )
         if des:
             des[0].send(out_there)
-        self.entry.enactor.move_to(des[0], inventory=des[1], coordinates=des[2])
+        self.enactor.move_to(des[0], inventory=des[1], coordinates=des[2])
         if des:
-            des[0].render_appearance(self.entry.enactor, self.parser, internal=True)
+            des[0].render_appearance(self.enactor, self.parser, internal=True)
         if loc:
             loc[0].send(out_here)
 

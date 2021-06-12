@@ -1,9 +1,12 @@
+import weakref
+
 from rich.text import Text
+from typing import Iterable
 
 from pymush.engine.cmdqueue import BreakQueueException, QueueEntryType
 from pymush.utils.text import case_match, truthy
 
-from .base import Command, MushCommand, CommandException, PythonCommandMatcher
+from .base import MushCommand, CommandException, PythonCommandMatcher
 
 
 class _ScriptCommand(MushCommand):
@@ -188,6 +191,97 @@ class SetCommand(_ScriptCommand):
             self.executor.msg("Set.")
 
 
+class _EmitCommand(_ScriptCommand):
+
+    def send_to_targets(self, targets: Iterable["GameObject"], to_send: Text):
+        if not to_send:
+            self.executor.msg("Nothing to send.")
+            return
+        if not targets:
+            self.executor.msg("Nobody to hear it.")
+
+        for target in targets:
+            can_send, err = target.can_receive_text(self.executor, self.interpreter, to_send)
+            if not can_send:
+                self.executor.msg(err)
+                continue
+            target.receive_text(self.executor, self.interpreter, to_send)
+
+
+class PemitCommand(_EmitCommand):
+    name = '@pemit'
+    aliases = ['@pe', '@pem', '@pemi']
+
+    def execute(self):
+        lsargs, rsargs = self.eqsplit_args(self.args)
+
+        obj, err = self.executor.locate_object(
+            name=self.parser.evaluate(lsargs), first_only=True
+        )
+        if err:
+            self.executor.msg(err)
+            return
+        obj = obj[0]
+        self.send_to_targets([obj], self.parser.evaluate(rsargs))
+
+
+class RemitCommand(_EmitCommand):
+    name = '@remit'
+    aliases = ['@re', '@rem', '@remi']
+
+    def execute(self):
+        lsargs, rsargs = self.eqsplit_args(self.args)
+
+        obj, err = self.executor.locate_object(
+            name=self.parser.evaluate(lsargs), first_only=True
+        )
+        if err:
+            self.executor.msg(err)
+            return
+        obj = obj[0]
+
+        targets = weakref.WeakSet()
+        targets.update(obj.contents)
+        targets.update(obj.namespaces['EXIT'])
+
+        self.send_to_targets(targets, self.parser.evaluate(rsargs))
+
+
+class OemitCommand(_EmitCommand):
+    name = '@oemit'
+    aliases = ['@oe', '@oem', '@oemi']
+
+    def execute(self):
+        lsargs, rsargs = self.eqsplit_args(self.args)
+
+        obj, err = self.executor.locate_object(
+            name=self.parser.evaluate(lsargs), first_only=True
+        )
+        if err:
+            self.executor.msg(err)
+            return
+        obj = obj[0]
+
+        loc = obj.location
+        if not loc:
+            self.executor.msg("Nothing would hear it.")
+            return
+
+        self.send_to_targets(obj.neighbors(include_exits=True), self.parser.evaluate(rsargs))
+
+
+class EmitCommand(_EmitCommand):
+    name = '@emit'
+    aliases = ['@em', '@emi']
+
+    def execute(self):
+        obj = self.executor
+        targets = obj.neighbors(include_exits=True)
+        targets.add(obj)
+
+        self.send_to_targets(targets, self.parser.evaluate(self.args))
+
+
 class ScriptCommandMatcher(PythonCommandMatcher):
     priority = 10
 
@@ -207,6 +301,10 @@ class ScriptCommandMatcher(PythonCommandMatcher):
             IncludeCommand,
             SwitchCommand,
             SetCommand,
+            PemitCommand,
+            RemitCommand,
+            OemitCommand,
+            EmitCommand
         ]
         for cmd in cmds:
             self.add(cmd)

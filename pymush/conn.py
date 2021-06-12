@@ -241,6 +241,7 @@ class GameSession:
         self.out_events: List[ConnectionOutMessage] = list()
         self.admin = False
         self.ending_safely = False
+        self.linkdead = False
         self.character.session = self
         self.user.account_sessions.add(self)
         now = time.time()
@@ -279,7 +280,8 @@ class GameSession:
         self.prompt.last_activity = time.time()
 
     def on_first_connection(self, connection: "Connection"):
-        pass
+        self.puppet.announce_login(from_linkdead=self.linkdead)
+        self.linkdead = False
 
     def _find_cmd(self, entry: "QueueEntry", cmd_text: str, matcher_categories):
         for matcher_name in matcher_categories:
@@ -317,13 +319,15 @@ class GameSession:
         if self.ending_safely:
             self.cleanup()
         else:
-            pass
+            self.linkdead = True
+            self.puppet.announce_linkdead()
 
     def cleanup(self):
         self.puppet.session = None
         if self.character.session:
             self.character.session = None
         self.user.account_sessions.remove(self)
+        self.puppet.announce_logout(from_linkdead=self.linkdead)
 
     def can_end_safely(self):
         return True, None

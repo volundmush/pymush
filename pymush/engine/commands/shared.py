@@ -58,7 +58,11 @@ class PyCommand(Command):
             sys.stdout = self
             sys.stderr = self
 
-            pycode_compiled = compile(args, "", "eval")
+            try:
+                pycode_compiled = compile(args, "", "eval")
+            except Exception:
+                pycode_compiled = compile(args, "", "exec")
+
 
             measure_time = True
 

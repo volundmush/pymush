@@ -56,6 +56,7 @@ class Config(BaseConfig):
             "thing": "pymush.engine.commands.thing.ThingCommandMatcher",
             "exit": "pymush.engine.commands.thing.ThingExitMatcher",
             "script": "pymush.engine.commands.scripting.ScriptCommandMatcher",
+            "roleplay": "pymush.engine.commands.roleplay.RoleplayCommandMatcher"
         }
 
     def _config_styles(self):
