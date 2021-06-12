@@ -1,10 +1,11 @@
-from typing import Optional, List, Set, Dict, Union
+from typing import Optional
 
+# Install Rich handling of console shenanigans.
 from rich import pretty
-
 pretty.install()
-from rich import traceback
 
+# Rich can handle untrapped tracebacks. Why not?
+from rich import traceback
 traceback.install()
 
 from athanor_server.app import Application as BaseApplication

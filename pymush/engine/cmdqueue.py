@@ -49,7 +49,7 @@ class QueueEntry:
         self.actions: Text = Text(actions) if isinstance(actions, str) else actions
         self.connection: Optional[Connection] = None
         self.parsers = weakref.WeakSet()
-        self.interpreters = weakref.WeakSet()
+        self.interpreters = list()
         self.pid = None
         self.start_timer: Optional[float] = None
         self.current_cmd = None
@@ -61,6 +61,13 @@ class QueueEntry:
         self.function_invocation_count = 0
         self.recursion_count = 0
         self.start_frame = None
+
+    @property
+    def interpreter(self):
+        try:
+            return self.interpreters[-1]
+        except IndexError:
+            return None
 
     @property
     def game(self):
@@ -365,3 +372,10 @@ class CmdQueue:
                     self.current_entry = None
             else:
                 await asyncio.sleep(0.05)
+
+    @property
+    def interpreter(self):
+        if self.current_entry:
+            return self.current_entry.interpreter
+        else:
+            return None

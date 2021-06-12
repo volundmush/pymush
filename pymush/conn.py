@@ -1,13 +1,14 @@
 import time
 import weakref
 
-from typing import Optional, Set, List
+from typing import Optional, Set, List, Tuple
 
 from rich.console import Console
 from rich.color import ColorSystem
 from rich.console import _null_highlighter
 from rich.traceback import Traceback
 from rich.box import ASCII
+from rich.text import Text
 
 from athanor.shared import (
     ConnectionDetails,
@@ -131,14 +132,40 @@ class Connection(BaseConnection):
     def receive_msg(self, message: fmt.FormatList):
         message.send(self)
 
-    def login(self, account: "GameObject"):
-        self.user = account
-        account.last_login = time.time()
-        account.connections.add(self)
+    def create_user(self, name: str, password: str) -> Tuple[bool, Optional[Text]]:
+        pass_hash = self.game.crypt_con.hash(password)
+        user, error = self.game.create_object("USER", name)
+        if error:
+            return False, Text(error)
+        user.password = pass_hash
+
+        cmd = (
+            f'connect "{user.name}" <password>'
+            if " " in user.name
+            else f"connect {user.name} <password>"
+        )
+        self.msg(text="User Account created! You can login with " + ansi_fun("hw", cmd))
+
+    def check_login(self, name: str, password: str) -> Tuple[bool, Optional[Text]]:
+        candidates = self.game.type_index["USER"]
+        user, error = self.game.search_objects(name, candidates=candidates, exact=True)
+        if error:
+            return False, Text("Sorry, that was an incorrect username or password.")
+        if not user:
+            return False, Text("Sorry, that was an incorrect username or password.")
+        if not user.check_password(password):
+            return False, Text("Sorry, that was an incorrect username or password.")
+        self.login(user)
+        return True, None
+
+    def login(self, user: "GameObject"):
+        self.user = user
+        user.last_login = time.time()
+        user.connections.add(self)
         self.show_select_screen()
-        if len(account.connections) == 1:
-            account.on_first_connection_login(self)
-        account.on_connection_login(self)
+        if len(user.connections) == 1:
+            user.on_first_connection_login(self)
+        user.on_connection_login(self)
 
     def show_select_screen(self):
         self.receive_msg(render_select_screen(self))

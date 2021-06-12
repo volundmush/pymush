@@ -256,3 +256,7 @@ class GameService(Service):
         if type_name in self.app.config.game_options["type_alevel"]:
             return self.app.config.game_options["type_alevel"][type_name]
         return self.app.config.game_options["default_alevel"]
+
+    @property
+    def interpreter(self):
+        return self.queue.interpreter

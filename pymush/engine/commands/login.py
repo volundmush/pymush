@@ -38,7 +38,7 @@ class _LoginCommand(Command):
 
 class ConnectCommand(_LoginCommand):
     """
-    Logs in to an existing Account.
+    Logs in to an existing User Account.
 
     Usage:
         connect <username> <password>
@@ -58,17 +58,9 @@ class ConnectCommand(_LoginCommand):
 
     def execute(self):
         name, password = self.parse_login(self.usage)
-        candidates = self.game.type_index["USER"]
-        account, error = self.game.search_objects(
-            name, candidates=candidates, exact=True
-        )
-        if error:
-            raise CommandException("Sorry, that was an incorrect username or password.")
-        if not account:
-            raise CommandException("Sorry, that was an incorrect username or password.")
-        if not account.check_password(password):
-            raise CommandException("Sorry, that was an incorrect username or password.")
-        self.entry.connection.login(account)
+        result, err = self.entry.connection.check_login(name, password)
+        if not result:
+            raise CommandException(err)
 
 
 class CreateCommand(_LoginCommand):
@@ -93,49 +85,15 @@ class CreateCommand(_LoginCommand):
 
     def execute(self):
         name, password = self.parse_login(self.usage)
-        pass_hash = self.game.crypt_con.hash(password)
-        account, error = self.game.create_object("USER", name)
-        if error:
-            raise CommandException(error)
-        account.password = pass_hash
-        # just ignoring password for now.
-        cmd = (
-            f'connect "{account.name}" <password>'
-            if " " in account.name
-            else f"connect {account.name} <password>"
-        )
-        self.msg(text="Account created! You can login with " + ansi_fun("hw", cmd))
-
-
-class LoginPyCommand(PyCommand):
-    @classmethod
-    def access(cls, interpreter):
-        # if entry.game.objects:
-        #    return False
-        return True
-
-
-class Test(Command):
-    name = "test"
-    re_match = re.compile(r"^(?P<cmd>test)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
-
-    @classmethod
-    def access(cls, interpreter):
-        return True
-
-    def execute(self):
-        menu = send_menu("testing", (("testing", "testing"),))
-        self.entry.enactor.menu = menu
-        out = fmt.FormatList(self.entry.enactor)
-        out.add(fmt.Line(menu))
-        self.entry.enactor.send(out)
+        result, err = self.entry.connection.create_user(name, password)
+        if not result:
+            raise CommandException(err)
 
 
 class LoginCommandMatcher(PythonCommandMatcher):
+
     def at_cmdmatcher_creation(self):
         self.add(CreateCommand)
         self.add(ConnectCommand)
-        self.add(LoginPyCommand)
-        self.add(Test)
         self.add(HelpCommand)
         self.add(QuitCommand)

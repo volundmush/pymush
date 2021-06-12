@@ -85,16 +85,16 @@ class User(GameObject):
         else:
             self.sys_attributes.pop("characters", None)
 
-    def on_connection_logout(self, connection: "Connection"):
+    def on_connection_logout(self, connection: "Connection", interpreter: "Interpreter"):
         pass
 
-    def on_final_connection_logout(self, connection: "Connection"):
+    def on_final_connection_logout(self, connection: "Connection", interpreter: "Interpreter"):
         pass
 
-    def on_first_connection_login(self, connection: "Connection"):
+    def on_first_connection_login(self, connection: "Connection", interpreter: "Interpreter"):
         pass
 
-    def on_connection_login(self, connection: "Connection"):
+    def on_connection_login(self, connection: "Connection", interpreter: "Interpreter"):
         pass
 
     def max_sessions(self):
