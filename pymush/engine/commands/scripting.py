@@ -3,7 +3,6 @@ import weakref
 from mudrich.text import Text
 from typing import Iterable
 
-from pymush.engine.cmdqueue import BreakQueueException, QueueEntryType
 from pymush.utils.text import case_match, truthy
 
 from .base import MushCommand, CommandException, PythonCommandMatcher
@@ -19,14 +18,13 @@ class DoListCommand(_ScriptCommand):
     available_switches = [
         "delimit",
         "clearregs",
-        "inline",
         "inplace",
         "localize",
         "nobreak",
         "notify",
     ]
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
         if "inplace" in self.switches:
             self.switches.update({"inline", "nobreak", "localize"})
@@ -48,46 +46,35 @@ class DoListCommand(_ScriptCommand):
         elements = self.split_by(elements, delim)
         nobreak = "nobreak" in self.switches
 
-        if "inline" in self.switches:
-            for i, elem in enumerate(elements):
-                self.entry.execute_action_list(
-                    rsargs, nobreak=nobreak, dnum=i, dvar=elem
-                )
-        else:
-            for i, elem in enumerate(elements):
-                self.entry.spawn_action_list(rsargs, dnum=i, dvar=elem)
+        for i, elem in enumerate(elements):
+            self.entry.inline(
+                rsargs, nobreak=nobreak, dnum=i, dvar=elem
+            )
 
 
 class AssertCommand(_ScriptCommand):
     name = "@assert"
     aliases = ["@as", "@ass", "@asse", "@asser"]
-    available_switches = ["queued"]
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
         if not self.parser.truthy(await self.parser.evaluate(lsargs)):
             if rsargs:
-                if "queued" in self.switches:
-                    self.entry.spawn_action_list(rsargs)
-                else:
-                    self.entry.execute_action_list(rsargs)
-            raise BreakQueueException(self)
+                self.entry.inline(rsargs)
+            self.entry.parser.frame.break_after = True
 
 
 class BreakCommand(_ScriptCommand):
     name = "@break"
     aliases = ["@br", "@bre", "@brea"]
-    available_switches = ["queued"]
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
         if self.parser.truthy(await self.parser.evaluate(lsargs)):
             if rsargs:
-                if "queued" in self.switches:
-                    self.entry.spawn_action_list(rsargs)
-                else:
-                    self.entry.execute_action_list(rsargs)
-            raise BreakQueueException(self)
+                self.entry.inline(rsargs)
+            self.entry.parser.frame.break_after = True
+
 
 
 class TriggerCommand(_ScriptCommand):
@@ -100,7 +87,7 @@ class IncludeCommand(_ScriptCommand):
     aliases = ["@inc", "@incl", "@inclu", "@includ"]
     available_switches = ["nobreak"]
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
         obj, attr_name, err = self.target_obj_attr(
             await self.parser.evaluate(lsargs), default=self.executor
@@ -108,27 +95,26 @@ class IncludeCommand(_ScriptCommand):
         if err:
             self.executor.msg(Text(err))
 
-        actions = self.get_attr(obj, attr_name=attr_name)
+        actions = await self.get_attr(obj, attr_name=attr_name)
 
         if not truthy(actions):
             self.executor.msg(
                 f"{self.name} cannot use that attribute. Is it accessible, and an action list?"
             )
 
-        number_args = [await self.parser.evaluate(arg) for arg in self.split_args(rsargs)]
-        inter = self.interpreter.make_child(actions, split=True)
-        inter.execute(number_args=number_args, nobreak="nobreak" in self.switches)
+        number_args = [await self.parser.evaluate(arg) for arg in self.split_cmd_args(rsargs)]
+        await self.entry.inline(actions, nobreak='nobreak' in self.switches, number_args=number_args)
 
 
 class SwitchCommand(_ScriptCommand):
     name = "@switch"
     aliases = ["@swi", "@swit", "@switc"]
-    available_switches = ["queued", "all"]
+    available_switches = ["all"]
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
         matcher = await self.parser.evaluate(lsargs)
-        s_rsargs = self.split_args(rsargs)
+        s_rsargs = self.split_cmd_args(rsargs)
 
         actions = list()
         default = None
@@ -151,23 +137,14 @@ class SwitchCommand(_ScriptCommand):
                 actions.append(default)
 
         if actions:
-            if "queued" in self.switches:
-                for action in actions:
-                    self.interpreter.spawn_action_list(
-                        self.parser.make_child_frame(stext=matcher), action
-                    )
-            else:
-                inter = self.interpreter
-                for action in actions:
-                    inter = inter.make_child(action, split=True)
-                    inter.execute(stext=matcher)
+            await self.entry.inline(actions)
 
 
 class SetCommand(_ScriptCommand):
     name = "@set"
     aliases = ["@se"]
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(
@@ -212,7 +189,7 @@ class PemitCommand(_EmitCommand):
     name = '@pemit'
     aliases = ['@pe', '@pem', '@pemi']
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(
@@ -229,7 +206,7 @@ class RemitCommand(_EmitCommand):
     name = '@remit'
     aliases = ['@re', '@rem', '@remi']
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(
@@ -251,7 +228,7 @@ class OemitCommand(_EmitCommand):
     name = '@oemit'
     aliases = ['@oe', '@oem', '@oemi']
 
-    def execute(self):
+    async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
 
         obj, err = self.executor.locate_object(
@@ -274,7 +251,7 @@ class EmitCommand(_EmitCommand):
     name = '@emit'
     aliases = ['@em', '@emi']
 
-    def execute(self):
+    async def execute(self):
         obj = self.executor
         targets = obj.neighbors(include_exits=True)
         targets.add(obj)
@@ -285,12 +262,8 @@ class EmitCommand(_EmitCommand):
 class ScriptCommandMatcher(PythonCommandMatcher):
     priority = 10
 
-    def access(self, interpreter: "Interpreter"):
-        t = interpreter.entry.type
-        if t == QueueEntryType.SCRIPT:
-            return True
-        elif t == QueueEntryType.IC:
-            return interpreter.entry.session.admin
+    async def access(self, entry: "TaskEntry"):
+        return not entry.session or entry.get_alevel() > 0
 
     def at_cmdmatcher_creation(self):
         cmds = [

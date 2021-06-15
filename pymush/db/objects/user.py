@@ -54,47 +54,16 @@ class User(GameObject):
             return False
         return self.game.crypt_con.verify(text, hash)
 
-    def add_character(self, character: GameObject):
-        characters = self.characters
-        if character not in characters:
-            characters.add(character)
-            self.characters = characters
-            character.account = self
-
-    def remove_character(self, character: GameObject):
-        characters = self.characters
-        if character in characters:
-            characters.remove(character)
-            self.characters = characters
-        if character.account == self:
-            character.account = None
-
-    @property
-    def characters(self):
-        ids = self.sys_attributes.get("characters", set())
-        count = len(ids)
-        result = set([i for f in ids if (i := self.game.objects.get(f, None))])
-        if len(result) != count:
-            self.characters = result
-        return result
-
-    @characters.setter
-    def characters(self, characters: Optional[Iterable[GameObject]] = None):
-        if characters:
-            self.sys_attributes["characters"] = [int(c) for c in characters]
-        else:
-            self.sys_attributes.pop("characters", None)
-
-    async def on_connection_logout(self, entry: "QueueEntry", connection: "Connection"):
+    async def on_connection_logout(self, connection: "Connection"):
         pass
 
-    async def on_final_connection_logout(self, entry: "QueueEntry", connection: "Connection"):
+    async def on_final_connection_logout(self, connection: "Connection"):
         pass
 
-    async def on_first_connection_login(self, entry: "QueueEntry", connection: "Connection"):
+    async def on_first_connection_login(self, connection: "Connection"):
         pass
 
-    async def on_connection_login(self, entry: "QueueEntry", connection: "Connection"):
+    async def on_connection_login(self, connection: "Connection"):
         pass
 
     def max_sessions(self):

@@ -16,7 +16,7 @@ class _MathFunction(BaseFunction):
 
     async def do_execute(self):
         try:
-            result = self.math_execute()
+            result = await self.math_execute()
         except ValueError as err:
             return Text(str(err))
         except ZeroDivisionError:
@@ -26,16 +26,16 @@ class _MathFunction(BaseFunction):
         else:
             return Text(str(result))
 
-    def math_execute(self):
+    async def math_execute(self):
         return 0
 
 
-class _SimpleMathFunction(BaseFunction):
+class _SimpleMathFunction(_MathFunction):
     func = sum
     min_args = 2
 
-    def math_execute(self):
-        nums = self.list_to_numbers(self.args)
+    async def math_execute(self):
+        nums = await self.list_to_numbers(self.args)
         return self.func(nums)
 
 
@@ -61,8 +61,8 @@ class AbsFunction(_MathFunction):
     name = "abs"
     exact_args = 1
 
-    def math_execute(self):
-        if (num := to_number(await self.parser.evaluate(self.args[0]))) is None:
+    async def math_execute(self):
+        if (num := to_number(await self.evaluate(self.args[0]))) is None:
             raise ValueError("#-1 ARGUMENT MUST BE NUMBER")
         return abs(num)
 
@@ -111,8 +111,8 @@ class BoundFunction(_MathFunction):
     min_args = 2
     max_args = 3
 
-    def math_execute(self):
-        out_vals = self.list_to_numbers(self.args)
+    async def math_execute(self):
+        out_vals = await self.list_to_numbers(self.args)
         min_out = min(out_vals[0], out_vals[1])
         if len(out_vals) == 3:
             return max(out_vals[2], min_out)
@@ -145,8 +145,8 @@ class CeilFunction(_MathFunction):
     name = "ceil"
     exact_args = 1
 
-    def math_execute(self):
-        numbers = self.list_to_numbers(self.args)
+    async def math_execute(self):
+        numbers = await self.list_to_numbers(self.args)
         return math.ceil(numbers[0])
 
 
@@ -237,8 +237,8 @@ class FloorFunction(_MathFunction):
     name = "floor"
     exact_args = 1
 
-    def math_execute(self):
-        out_vals = self.list_to_numbers(self.args)
+    async def math_execute(self):
+        out_vals = await self.list_to_numbers(self.args)
         return math.floor(out_vals[0])
 
 
@@ -289,16 +289,15 @@ class LMathFunction(_MathFunction):
         "fdiv": _fdivall,
     }
 
-    def math_execute(self):
-        op = await self.parser.evaluate(self.args[0]).plain.lower()
+    async def math_execute(self):
+        op = await self.evaluate(self.args[0]).plain.lower()
         func = self.ops.get(op, None)
         if not func:
             raise ValueError(f"#-1 UNSUPPORTED OPERATION ({op})")
 
-        delim = await self.parser.evaluate(self.args[2]) if len(self.args) == 3 else Text(" ")
-        print(self.args)
-        out_vals = self.list_to_numbers(
-            await self.parser.evaluate(self.args[1]).split(delim.plain)
+        delim = await self.evaluate(self.args[2]) if len(self.args) == 3 else Text(" ")
+        out_vals = await self.list_to_numbers(
+            await self.evaluate(self.args[1]).split(delim.plain)
         )
         return func(out_vals)
 

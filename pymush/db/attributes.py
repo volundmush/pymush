@@ -89,7 +89,7 @@ class AttributeRequest:
     accessor: "GameObject"
     req_type: AttributeRequestType
     name: Union[str, Text]
-    entry: "QueueEntry"
+    entry: "TaskEntry"
     value: Optional[Union[str, Text]] = None
     attr_base: Optional[Attribute] = None
     attr: Optional[AttributeValue] = None

@@ -5,7 +5,7 @@ from .base import GameObject
 class Player(GameObject):
     type_name = "PLAYER"
     unique_names = True
-    cmd_matchers = ("thing", "player", "script")
+    cmd_matchers = ("basic", "thing", "player")
     can_be_puppet = True
     ignore_sessionless = True
 

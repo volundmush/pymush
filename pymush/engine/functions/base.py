@@ -18,21 +18,34 @@ class BaseFunction(BaseApi):
     eval_args = True
     help_category = None
 
-    def __init__(self, entry, called_as: str, args_data: Text):
+    def __init__(self, entry, called_as: str, args_data: Text, full_call: Text, debug_objs):
         self.entry = entry
+        self.full_call = full_call
         self.called_as = called_as
         self.args_data = args_data
         self.args = list()
         self.args_eval = list()
         self.args_count = 1
         self.error = False
+        self.debug_objs = debug_objs
+        self.evaluate_count = 0
+
+    async def evaluate(self, text: Text, **kwargs):
+        if self.evaluate_count == 0:
+            for obj in self.debug_objs:
+                await obj.print_debug_eval_enter(self.entry, self.full_call)
+        self.evaluate_count += 1
+        output = await self.entry.parser.evaluate(text, **kwargs)
+        for obj in self.debug_objs:
+            await obj.print_debug_eval_result(self.entry, text, result=output)
+        return output
 
     @classmethod
-    def help(cls, interpreter):
+    def help(cls, entry):
         """
         This is called by the command-help system if help is called on this command.
         """
-        enactor = interpreter.frame.enactor
+        enactor = entry.enactor
         if cls.__doc__:
             out = fmt.FormatList(enactor)
             out.add(fmt.Header(f"Help: {cls.name}"))
@@ -126,7 +139,10 @@ class BaseFunction(BaseApi):
             return self._err_uneven_args(c)
         if self.odd_args and c % 2 == 0:
             return self._err_even_args(c)
-        return await self.do_execute()
+        output = await self.do_execute()
+        #for obj in self.debug_objs:
+        #    await obj.print_debug_eval_result(self.entry, self.full_call, result=output, bonus_depth=-1)
+        return output
 
     async def do_execute(self):
         return Text(f"#-1 FUNCTION {self.name.upper()} IS NOT IMPLEMENTED")
@@ -140,10 +156,10 @@ class BaseFunction(BaseApi):
                 out.append(delim)
         return out
 
-    def list_to_numbers(self, numbers: Iterable[Text]) -> List[Union[float, int]]:
+    async def list_to_numbers(self, numbers: Iterable[Text]) -> List[Union[float, int]]:
         out_vals = list()
         for arg in numbers:
-            num = to_number(await self.parser.evaluate(arg))
+            num = to_number(await self.evaluate(arg))
             if num is None:
                 raise ValueError("#-1 ARGUMENTS MUST BE NUMBERS")
             out_vals.append(num)

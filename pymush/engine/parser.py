@@ -52,10 +52,9 @@ class MushSub(IntEnum):
 
 
 class StackFrame:
-    def __init__(self, enactor, executor, caller):
-        self.parser = None
+    def __init__(self, parser, executor, enactor, caller):
+        self.parser = parser
         self.parent = None
-        self.entry = None
         self.break_after = False
         self.enactor = enactor
         self.executor = executor
@@ -71,6 +70,10 @@ class StackFrame:
         self.localized = False
         self.vars = dict()
         self.ukeys = dict()
+
+    @property
+    def entry(self):
+        return self.parser.entry
 
     def localize(self):
         self.localized = True
@@ -198,12 +201,17 @@ class Parser:
     re_inum = re.compile(r"^%i_(?P<num>\d+)", flags=re.IGNORECASE)
     re_numeric = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
-    def __init__(self, entry, frame):
+    def __init__(self, entry, executor: "GameObject", enactor: "GameObject", caller: "GameObject"):
         self.entry = entry
-        self.frame = frame
-        self.frame.parser = self
-        self.frame.entry = entry
-        self.stack = [self.frame]
+        f = StackFrame(parser=self, executor=executor, enactor=enactor, caller=caller)
+        self.stack = [f]
+
+    @property
+    def frame(self):
+        try:
+            return self.stack[-1]
+        except IndexError:
+            return None
 
     def make_child(self, **kwargs):
         frame = self.make_child_frame(**kwargs)
@@ -226,9 +234,10 @@ class Parser:
     ):
         cur_frame = self.frame
         new_frame = StackFrame(
-            enactor if enactor else self.frame.enactor,
-            executor if executor else self.frame.executor,
-            caller if caller else self.frame.caller,
+            parser=self,
+            enactor=enactor if enactor else self.frame.enactor,
+            executor=executor if executor else self.frame.executor,
+            caller=caller if caller else self.frame.caller,
         )
 
         if localize:
@@ -251,32 +260,34 @@ class Parser:
     def enter_frame(self, **kwargs):
         cur_frame = self.frame
         new_frame = self.make_child_frame(**kwargs)
-
         new_frame.parent = cur_frame
-        new_frame.entry = self.entry
-        new_frame.parser = self
         self.stack.append(new_frame)
-        self.frame = new_frame
 
     def exit_frame(self):
         if self.stack:
             self.stack.pop(-1)
-            if self.stack:
-                self.frame = self.stack[-1]
+
+    @property
+    def enactor(self):
+        return self.frame.enactor
+
+    @property
+    def executor(self):
+        return self.frame.executor
+
+    @property
+    def caller(self):
+        return self.frame.caller
 
     async def evaluate(
         self,
         text: Union[None, str, Text],
-        localize: bool = False,
         called_recursively: bool = False,
-        executor: Optional["GameObject"] = None,
-        caller: Optional["GameObject"] = None,
-        number_args=None,
-        no_eval=False,
-        iter=None,
-        inum=None,
-        ivar=None,
-        stext=None,
+        no_eval: bool = False,
+        debug_objs = None,
+        debug_display_input = False,
+        bonus_depth = 0,
+        **kwargs
     ):
 
         if not text:
@@ -286,19 +297,24 @@ class Parser:
 
         if not no_eval:
             self.entry.recursion_count += 1
-            if self.entry.recursion_count >= self.entry.queue.function_recursion_limit:
+            if self.entry.recursion_count >= self.entry.function_recursion_limit:
                 return Text("#-1 FUNCTION RECURSION LIMIT EXCEEDED")
 
-            self.enter_frame(
-                localize=localize,
-                executor=executor,
-                caller=caller,
-                number_args=number_args,
-                iter=iter,
-                inum=inum,
-                ivar=ivar,
-                stext=stext,
-            )
+            self.enter_frame(**kwargs)
+
+        if debug_objs is None:
+            debug_objs = set()
+            if await self.entry.holder.controls(self, self.executor) and await self.entry.holder.see_debug(self):
+                debug_objs.add(self.entry.holder)
+            if await self.executor.see_debug(self):
+                debug_objs.add(self.executor)
+
+        if debug_display_input:
+            debug_text = text if not called_recursively else '[' + text + ']'
+            bonus_depth += 1
+            if debug_objs:
+                for obj in debug_objs:
+                    await obj.print_debug_eval_enter(self.entry, debug_text)
 
         output = Text("")
 
@@ -342,8 +358,8 @@ class Parser:
                         if closing is not None:
                             if i > segment_start:
                                 output += text[segment_start:i]
-                            output += self.evaluate(
-                                text[i + 1 : closing], called_recursively=True
+                            output += await self.evaluate(
+                                text[i + 1 : closing], called_recursively=True, debug_objs=set(debug_objs)
                             )
                             segment_start = closing + 1
                             i = closing + 1
@@ -373,17 +389,22 @@ class Parser:
                                     self.entry.function_invocation_count += 1
                                     if (
                                         self.entry.function_invocation_count
-                                        >= self.entry.queue.function_invocation_limit
+                                        >= self.entry.function_invocation_limit
                                     ):
                                         output = Text(
                                             "#-1 FUNCTION INVOCATION LIMIT EXCEEDED"
                                         )
                                         break
                                     else:
+                                        full_call = text[f_match.start():closing + 1]
+                                        args = text[i + 1: closing]
                                         ready_fun = func(
-                                            self.entry, func_name, text[i + 1 : closing]
+                                            self.entry, func_name, args, full_call, debug_objs
                                         )
+
                                         output = await ready_fun.execute()
+                                        #for obj in debug_objs:
+                                        #    await obj.print_debug_eval_result(self.entry, full_call, result=output)
                                 segment_start = closing + 1
                                 i = closing + 1
                         else:
@@ -395,7 +416,12 @@ class Parser:
                             if i > segment_start:
                                 output += text[segment_start:i]
                             length, sub = results
-                            output += self.frame.eval_sub(sub[0], sub[1])
+                            full_sub = text[i:i+length]
+                            results = self.frame.eval_sub(sub[0], sub[1])
+                            if debug_objs:
+                                for obj in debug_objs:
+                                    await obj.print_debug_eval_result(self.entry, full_sub, result=results)
+                            output += results
                             i += length
                             segment_start = i
                         else:
@@ -411,6 +437,10 @@ class Parser:
                 if i > segment_start:
                     remaining = text[segment_start:i]
                     output += remaining
+
+        if debug_display_input and debug_objs:
+            for obj in debug_objs:
+                await obj.print_debug_eval_result(self.entry, debug_text, output)
 
         # if we reach down here, then we are doing well and can pop a frame off.
         if not no_eval:
@@ -481,6 +511,7 @@ class Parser:
                 varlength = len(varname)
                 if varname.isdigit():
                     varname = int(varname)
+                print(f"Found a q-reg: {extra+varlength} - {varname}")
                 return extra + varlength, (MushSub.REGISTER_VALUE, varname)
 
         for code, reg, length in (
@@ -500,5 +531,5 @@ class Parser:
         return None
 
     async def find_function(self, funcname: str, default=None):
-        found = self.entry.queue.game.functions.get(funcname.lower(), None)
+        found = self.entry.game.functions.get(funcname.lower(), None)
         return found if found else default

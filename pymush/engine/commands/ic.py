@@ -14,17 +14,17 @@ class LogoutCommand(Command):
     name = "@logout"
     re_match = re.compile(r"^(?P<cmd>@logout)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
-    def execute(self):
+    async def execute(self):
         mdict = self.match_obj.groupdict()
         args = mdict["args"]
         if args is None:
             args = ""
-        can_end, why_not = self.session.can_end_safely()
+        can_end, why_not = self.entry.session.can_end_safely()
         if can_end:
-            self.session.end_safely()
+            self.entry.session.end_safely()
             return
         elif args.lower() == "force":
-            self.session.end_unsafely()
+            self.entry.session.end_unsafely()
         else:
             if why_not:
                 self.enactor.msg(why_not)
@@ -37,28 +37,34 @@ class OOCCommand(Command):
     name = "@ooc"
     re_match = re.compile(r"^(?P<cmd>@ooc)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
-    def execute(self):
+    async def execute(self):
         mdict = self.match_obj.groupdict()
         args = mdict["args"]
         if args is None:
             args = ""
-        if len(self.session.connections) == 1:
+        if len(self.entry.session.connections) == 1:
             self.enactor.msg(
                 "Cannot go @ooc with just one connection left on the session! To logout, use @logout instead."
             )
             return
-        self.connection.leave_session()
-        self.connection.show_select_screen()
+        self.entry.connection.leave_session()
+        self.entry.connection.show_select_screen()
 
 
 class SessionPyCommand(PyCommand):
     @classmethod
-    def access(cls, interpreter):
-        return interpreter.session.get_alevel() >= 10
+    async def access(cls, entry):
+        return entry.session.get_alevel() >= 10
 
     def available_vars(self):
         out = super().available_vars()
+        out["entry"] = self.entry
+        out["executor"] = self.entry.executor
+        out["enactor"] = self.entry.enactor
+        out["caller"] = self.entry.caller
+        out['connection'] = self.entry.connection
         out["session"] = self.entry.session
+        out["game"] = self.entry.game
         return out
 
 
@@ -67,10 +73,10 @@ class AdminCommand(PyCommand):
     re_match = re.compile(r"^(?P<cmd>@admin)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     @classmethod
-    def access(cls, interpreter):
-        return interpreter.session.get_alevel(ignore_fake=True) > 0
+    async def access(cls, entry):
+        return entry.session.get_alevel(ignore_fake=True) > 0
 
-    def execute(self):
+    async def execute(self):
         self.entry.session.admin = not self.entry.session.admin
         if self.entry.session.admin:
             self.msg(text="You are now in admin mode! Admin permissions enabled.")
@@ -89,14 +95,14 @@ class QuitCommand(Command):
     re_match = re.compile(r"^(?P<cmd>QUIT)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
     help_category = "System"
 
-    def execute(self):
+    async def execute(self):
         raise Exception("This is a test of the command exception system!")
         # self.enactor.msg("Cannot QUIT while @ic! Please see @ooc and @logout instead!")
 
 
 class SessionCommandMatcher(PythonCommandMatcher):
-    def access(self, interpreter: "Interpreter"):
-        return bool(interpreter.session)
+    async def access(self, entry: "TaskEntry"):
+        return bool(entry.connection)
 
     def at_cmdmatcher_creation(self):
         self.add(OOCCommand)

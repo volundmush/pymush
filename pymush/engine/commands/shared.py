@@ -19,33 +19,26 @@ class PyCommand(Command):
     help_category = "System"
 
     def available_vars(self):
-        return {
-            "entry": self.entry,
-            "parser": self.parser,
-            "enactor": self.entry.enactor,
-            "connection": self.entry.connection,
-            "game": self.game,
-            "app": self.game.app,
-        }
+        return {}
 
     @classmethod
-    def access(cls, interpreter):
-        return interpreter.get_slevel() >= 10
+    async def access(cls, entry):
+        return entry.get_alevel() >= 10
 
     def flush(self):
         pass
 
     def write(self, text):
-        out = fmt.FormatList(self.enactor)
+        out = fmt.FormatList(self.executor)
         out.add(fmt.PyDebug(text.rsplit("\n", 1)[0]))
-        self.enactor.send(out)
+        self.executor.send(out)
 
-    def execute(self):
+    async def execute(self):
         mdict = self.match_obj.groupdict()
         args = mdict.get("args", None)
         if not args:
             raise CommandException("@py requires arguments!")
-        out = fmt.FormatList(self.enactor)
+        out = fmt.FormatList(self.executor)
         out.add(fmt.Line(f">>> {args}"))
         duration = ""
         ret = None
@@ -85,7 +78,7 @@ class PyCommand(Command):
         out.add(fmt.PyDebug(repr(ret)))
         if duration:
             out.add(fmt.Line(duration))
-        self.enactor.send(out)
+        self.executor.send(out)
 
 
 class HelpCommand(Command):
@@ -96,8 +89,11 @@ class HelpCommand(Command):
     name = "help"
     re_match = re.compile(r"^(?P<cmd>help)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
-    def execute(self):
-        categories = self.interpreter.get_help()
+    async def get_help(self):
+        return await self.entry.get_help()
+
+    async def execute(self):
+        categories = await self.get_help()
 
         gdict = self.match_obj.groupdict()
         args = gdict.get("args", None)
@@ -109,7 +105,7 @@ class HelpCommand(Command):
 
     def display_help(self, data):
         cat_sort = sorted(data.keys())
-        out = fmt.FormatList(self.entry.enactor)
+        out = fmt.FormatList(self.entry.executor)
         out.add(fmt.Header("Help: Available Commands"))
         for cat_key in cat_sort:
             cat = data[cat_key]
@@ -127,7 +123,7 @@ class HelpCommand(Command):
                 )
             )
         out.add(fmt.Footer("help <command> for further help"))
-        self.entry.enactor.send(out)
+        self.entry.executor.send(out)
 
     def display_help_file(self, data, name):
         total = set()
@@ -148,9 +144,9 @@ class QuitCommand(Command):
     re_match = re.compile(r"^(?P<cmd>QUIT)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
     help_category = "System"
 
-    def execute(self):
-        out = fmt.FormatList(self.enactor)
+    async def execute(self):
+        out = fmt.FormatList(self.executor)
         out.add(fmt.Line("See you again!"))
         out.reason = "quit"
-        self.send(out)
-        self.enactor.terminate()
+        self.executor.send(out)
+        self.executor.terminate()

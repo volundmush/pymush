@@ -5,7 +5,7 @@ from mudrich.text import Text
 
 from mudrich.encodings.pennmush import ansi_fun, ansi_fun_style
 
-from rich import box, table, columns
+from mudrich import box, table, columns
 
 
 class BaseFormatter:

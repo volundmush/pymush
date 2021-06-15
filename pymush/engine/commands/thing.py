@@ -13,40 +13,40 @@ class LookCommand(MushCommand):
     aliases = ["l", "lo", "loo"]
     help_category = "Interaction"
 
-    def execute(self):
+    async def execute(self):
         enactor = self.parser.frame.enactor
         if self.args:
-            arg = self.gather_arg()
+            arg = self.args
             if len(arg):
-                found, err = enactor.locate_object(
+                found, err = await enactor.locate_object(self.entry,
                     arg.plain, first_only=True, multi_match=True
                 )
                 if found:
-                    self.look_at(found[0])
+                    await self.look_at(found[0])
                 else:
                     raise CommandException("I don't see that here.")
             else:
-                self.look_here()
+                await self.look_here()
         else:
-            self.look_here()
+            await self.look_here()
 
-    def look_at(self, target):
+    async def look_at(self, target):
         enactor = self.parser.frame.enactor
         loc = enactor.location
         if loc:
             if loc == target:
-                target.render_appearance(self.interpreter, enactor, internal=True)
+                await target.render_appearance(self.entry, enactor, internal=True)
             else:
-                target.render_appearance(self.interpreter, enactor)
+                await target.render_appearance(self.entry, enactor)
         else:
-            target.render_appearance(self.interpreter, enactor)
+            await target.render_appearance(self.entry, enactor)
 
-    def look_here(self):
+    async def look_here(self):
         enactor = self.parser.frame.enactor
         loc = enactor.location
 
         if loc:
-            loc.render_appearance(self.interpreter, enactor, internal=True)
+            await loc.render_appearance(self.entry, enactor, internal=True)
         else:
             raise CommandException("You are nowhere. There's not much to see.")
 
@@ -56,7 +56,7 @@ class ThinkCommand(MushCommand):
     aliases = ["th", "thi", "thin"]
     help_category = "Misc"
 
-    def execute(self):
+    async def execute(self):
         self.enactor.msg(await self.parser.evaluate(self.args))
 
 
@@ -72,7 +72,7 @@ class ExitCommand(Command):
     name = "goto"
     help_category = "Navigation"
 
-    def execute(self):
+    async def execute(self):
         ex = self.match_obj
         des = ex.destination if ex.destination and ex.destination[0] else None
         if not des:
@@ -98,7 +98,7 @@ class ExitCommand(Command):
             des[0].send(out_there)
         self.enactor.move_to(des[0], inventory=des[1], coordinates=des[2])
         if des:
-            des[0].render_appearance(self.enactor, self.parser, internal=True)
+            await des[0].render_appearance(self.entry, self.enactor, self.parser, internal=True)
         if loc:
             loc[0].send(out_here)
 
@@ -106,8 +106,9 @@ class ExitCommand(Command):
 class ThingExitMatcher(BaseCommandMatcher):
     priority = 110
 
-    def match(self, interpreter, text):
-        loc = interpreter.enactor.location
+    async def match(self, entry, text):
+        ex = entry.executor
+        loc = ex.location
         if not loc:
             return
 
@@ -120,7 +121,7 @@ class ThingExitMatcher(BaseCommandMatcher):
             exits = loc.namespaces["EXIT"]
             if not exits:
                 return
-            found, err = interpreter.enactor.locate_object(
+            found, err = await ex.locate_object(entry,
                 text,
                 general=False,
                 dbref=False,
@@ -136,7 +137,7 @@ class ThingExitMatcher(BaseCommandMatcher):
             if not found:
                 return
             else:
-                return ExitCommand(interpreter, text, found[0])
+                return ExitCommand(entry, text, found[0])
 
-    def populate_help(self, enactor, data):
+    async def populate_help(self, enactor, data):
         data["Navigation"].add(ExitCommand)

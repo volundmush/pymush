@@ -12,13 +12,14 @@ class CommandException(Exception):
     pass
 
 
-class Command(BaseApi):
+class Command:
     name = None  # Name must be set to a string!
     aliases = []
     help_category = None
+    timestamp_after = True
 
     @classmethod
-    def access(cls, entry: "QueueEntry"):
+    async def access(cls, entry: "TaskEntry"):
         """
         This returns true if <enactor> is able to see and use this command.
 
@@ -28,11 +29,12 @@ class Command(BaseApi):
         return True
 
     @classmethod
-    def help(cls, entry: "QueueEntry"):
+    def help(cls, entry: "TaskEntry"):
         """
         This is called by the command-help system if help is called on this command.
         """
         executor = entry.executor
+
         if cls.__doc__:
             out = fmt.FormatList(executor)
             out.add(fmt.Header(f"Help: {cls.name}"))
@@ -43,7 +45,7 @@ class Command(BaseApi):
             executor.msg(text="Help is not implemented for this command.")
 
     @classmethod
-    def match(cls, entry: "QueueEntry", text: Text):
+    async def match(cls, entry: "TaskEntry", text: Text):
         """
         Called by the CommandGroup to determine if this command matches.
         Returns False or a Regex Match object.
@@ -54,16 +56,13 @@ class Command(BaseApi):
         if (result := cls.re_match.fullmatch(text.plain)) :
             return result
 
-    def __init__(self, entry: "QueueEntry", text: Text, match_obj):
+    def __init__(self, entry: "TaskEntry", text: Text, match_obj):
         """
         Instantiates the command.
         """
         self.text = text
         self.match_obj = match_obj
         self.entry = entry
-
-    def split_args(self, text: Union[str, Text]):
-        return self.split_cmd_args(text)
 
     async def execute(self):
         """
@@ -79,8 +78,23 @@ class Command(BaseApi):
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.name}>"
 
+    @property
+    def executor(self):
+        return self.entry.executor
 
-class MushCommand(Command):
+    @property
+    def caller(self):
+        return self.entry.caller
+
+    @property
+    def enactor(self):
+        return self.entry.enactor
+
+    def msg(self, *args, **kwargs):
+        self.executor.msg(*args, **kwargs)
+
+
+class MushCommand(BaseApi, Command):
     available_switches = []
 
     async def at_pre_execute(self):
@@ -91,7 +105,7 @@ class MushCommand(Command):
                 )
 
     @classmethod
-    def match(cls, entry, text):
+    async def match(cls, entry, text):
         """
         Called by the CommandGroup to determine if this command matches.
         Returns False or a Regex Match object.
@@ -135,7 +149,7 @@ class BaseCommandMatcher:
         self.at_cmdmatcher_creation()
 
     @classmethod
-    async def access(cls, entry: "QueueEntry"):
+    async def access(cls, entry: "TaskEntry"):
         return True
 
     def at_cmdmatcher_creation(self):
@@ -145,10 +159,10 @@ class BaseCommandMatcher:
         """
         pass
 
-    async def match(self, entry: "QueueEntry", text: Text):
+    async def match(self, entry: "TaskEntry", text: Text):
         pass
 
-    async def populate_help(self, entry: "QueueEntry", data):
+    async def populate_help(self, entry: "TaskEntry", data):
         pass
 
     def __repr__(self):
@@ -163,12 +177,12 @@ class PythonCommandMatcher(BaseCommandMatcher):
     def add(self, cmd_class):
         self.cmds.add(cmd_class)
 
-    async def match(self, entry: "QueueEntry", text: Text):
+    async def match(self, entry: "TaskEntry", text: Text):
         for cmd in self.cmds:
-            if await cmd.access(entry) and (result := cmd.match(entry, text)):
+            if await cmd.access(entry) and (result := await cmd.match(entry, text)):
                 return cmd(entry, text, result)
 
-    async def populate_help(self, entry: "QueueEntry", data):
+    async def populate_help(self, entry: "TaskEntry", data):
         for cmd in self.cmds:
             if cmd.help_category and await cmd.access(entry):
                 data[cmd.help_category].add(cmd)

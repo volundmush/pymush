@@ -15,7 +15,6 @@ from athanor.utils import partial_match
 
 from pymush.db.objects.base import GameObject
 
-from .engine.cmdqueue import CmdQueue
 from .utils.misc import callables_from_module
 
 
@@ -23,7 +22,6 @@ class GameService(Service):
     def __init__(self, app):
         super().__init__(app)
         self.app.game = self
-        self.queue = CmdQueue(self)
         self.objects: OrderedDict[int, GameObject] = OrderedDict()
         self.db_objects: weakref.WeakValueDictionary[
             str, GameObject
@@ -39,6 +37,7 @@ class GameService(Service):
         self.option_classes = dict()
         self.functions = dict()
         self.update_subscribers = weakref.WeakSet()
+        self.options = self.app.config.game_options
 
     @property
     def styles(self):
@@ -71,9 +70,6 @@ class GameService(Service):
 
     async def async_setup(self):
         pass
-
-    async def async_run(self):
-        await self.queue.run()
 
     def serialize(self) -> dict:
         out = dict()
@@ -116,7 +112,7 @@ class GameService(Service):
 
     async def create_object(
         self,
-        entry: "QueueEntry",
+        entry: "TaskEntry",
         type_name: str,
         name: str,
         dbid: Optional[int] = None,
@@ -206,9 +202,10 @@ class GameService(Service):
         self.type_index[obj.type_name].add(obj)
         self.db_objects[obj.dbref] = obj
         self.db_objects[obj.objid] = obj
+        obj.start()
 
-    async def search_objects(entry: "QueueEntry",
-        self, name, candidates: Optional[Iterable] = None, exact=False, aliases=False
+    def search_objects(self,
+        name, candidates: Optional[Iterable] = None, exact=False, aliases=True
     ):
         if candidates is None:
             candidates = self.objects.values()
@@ -222,14 +219,15 @@ class GameService(Service):
                 return found, None
         return None, f"Sorry, nothing matches: {name}"
 
-    async def create_or_join_session(self, entry: "QueueEntry", connection: "Connection", character: "GameObject"):
+    async def create_or_join_session(self, connection: "Connection", character: "GameObject"):
         if not (sess := self.sessions.get(character.dbid, None)):
             if len(connection.user.account_sessions) > connection.user.max_sessions():
                 return "Too many Sessions already in play for this User Account!"
             sess = self.app.classes["game"]["gamesession"](connection.user, character)
             self.sessions[character.dbid] = sess
             connection.user.account_sessions.add(sess)
-        await connection.join_session(entry, sess)
+            sess.start()
+        await connection.join_session(sess)
 
     def update(self, now: float, delta: float):
         for obj in self.update_subscribers:

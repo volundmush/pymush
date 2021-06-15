@@ -10,8 +10,8 @@ class SetRFunction(BaseFunction):
     exact_args = 2
 
     async def do_execute(self):
-        reg_name = await self.parser.evaluate(self.args[0])
-        value = await self.parser.evaluate(self.args[1])
+        reg_name = await self.evaluate(self.args[0])
+        value = await self.evaluate(self.args[1])
 
         reg_name = reg_name.plain.strip()
         if reg_name.isdigit():
@@ -44,11 +44,11 @@ class IfFunction(BaseFunction):
     max_args = 3
 
     async def do_execute(self):
-        if self.parser.truthy(await self.parser.evaluate(self.args[0])):
-            return await self.parser.evaluate(self.args[1])
+        if self.parser.truthy(await self.evaluate(self.args[0])):
+            return await self.evaluate(self.args[1])
         else:
             if len(self.args) == 3:
-                return await self.parser.evaluate(self.args[2])
+                return await self.evaluate(self.args[2])
             else:
                 return Text("")
 
@@ -67,14 +67,14 @@ class IterFunction(BaseFunction):
         delim = " "
         out_delim = Text(" ")
         if self.args_count >= 3:
-            delim = await self.parser.evaluate(self.args[2])
+            delim = await self.evaluate(self.args[2])
         if self.args_count == 4:
-            out_delim = await self.parser.evaluate(self.args[3])
+            out_delim = await self.evaluate(self.args[3])
 
-        elements = self.split_by(await self.parser.evaluate(self.args[0]), delim)
+        elements = self.split_by(await self.evaluate(self.args[0]), delim)
 
         for i, elem in enumerate(elements):
-            out.append(await self.parser.evaluate(self.args[1], iter=self, inum=i, ivar=elem))
+            out.append(await self.evaluate(self.args[1], iter=self, inum=i, ivar=elem))
             if self.ibreak:
                 break
 
@@ -88,7 +88,7 @@ class IBreakFunction(BaseFunction):
     async def do_execute(self):
         if not self.parser.frame.iter:
             return Text("#-1 ARGUMENT OUT OF RANGE")
-        arg = await self.parser.evaluate(self.args[0])
+        arg = await self.evaluate(self.args[0])
         if arg:
             num = self.parser.to_number(arg)
             if num is not None:
@@ -109,17 +109,17 @@ class SwitchFunction(BaseFunction):
     min_args = 3
 
     async def do_execute(self):
-        matcher = await self.parser.evaluate(self.args[0])
+        matcher = await self.evaluate(self.args[0])
         if len(self.args[1:]) % 2 == 0:
             default = Text("")
             args = self.args[1:]
         else:
-            default = await self.parser.evaluate(self.args[-1], stext=matcher)
+            default = await self.evaluate(self.args[-1], stext=matcher)
             args = self.args[1:-1]
 
         for case, outcome in zip(args[0::2], args[1::2]):
-            if case_match(matcher, await self.parser.evaluate(case, stext=matcher)):
-                return await self.parser.evaluate(outcome, stext=matcher)
+            if case_match(matcher, await self.evaluate(case, stext=matcher)):
+                return await self.evaluate(outcome, stext=matcher)
         return default
 
 
@@ -128,7 +128,7 @@ class UFunction(BaseFunction):
     min_args = 1
 
     async def do_execute(self):
-        obj, attr_name, err = self.target_obj_attr(await self.parser.evaluate(self.args[0]))
+        obj, attr_name, err = self.target_obj_attr(await self.evaluate(self.args[0]))
         if err:
             return Text("#-1 UNABLE TO LOCATE OBJECT")
 
@@ -136,8 +136,8 @@ class UFunction(BaseFunction):
         if req.error:
             return req.error
         code = req.value
-        number_args = [await self.parser.evaluate(arg) for arg in self.args[1:]]
+        number_args = [await self.evaluate(arg) for arg in self.args[1:]]
 
-        return await self.parser.evaluate(
+        return await self.evaluate(
             code, number_args=number_args, executor=obj, caller=self.executor
         )

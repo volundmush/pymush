@@ -2,7 +2,7 @@ import weakref
 
 from mudrich.text import Text
 from typing import Iterable
-from pymush.engine.cmdqueue import BreakQueueException, QueueEntryType
+from pymush.engine.task import BreakQueueException
 from pymush.utils.text import case_match, truthy
 
 from .base import MushCommand, CommandException, PythonCommandMatcher
@@ -28,7 +28,7 @@ class _RoleplayCommand(MushCommand):
 class SayCommand(MushCommand):
     name = 'say'
 
-    def execute(self):
+    async def execute(self):
         end_quote = Text('"')
         to_send = await self.parser.evaluate(self.args)
         you_see = Text('You say, "') + to_send + end_quote
@@ -45,7 +45,7 @@ class SayCommand(MushCommand):
 class PoseCommand(MushCommand):
     name = 'pose'
 
-    def execute(self):
+    async def execute(self):
         to_send = await self.parser.evaluate(self.args)
         you_see = Text('You ') + to_send
         self.executor.receive_text(self.executor, self.interpreter, you_see, mode=self.name)
@@ -61,7 +61,7 @@ class PoseCommand(MushCommand):
 class SemiPoseCommand(MushCommand):
     name = 'semipose'
 
-    def execute(self):
+    async def execute(self):
         to_send = await self.parser.evaluate(self.args)
         you_see = Text('You') + to_send
         self.executor.receive_text(self.executor, self.interpreter, you_see, mode=self.name)

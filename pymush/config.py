@@ -30,8 +30,8 @@ class Config(BaseConfig):
         self.classes["game"][
             "attributehandler"
         ] = "pymush.db.attributes.AttributeHandler"
-        self.classes["game"]["scripthandler"] = "pymush.db.scripts.ScriptHandler"
         self.classes["game"]["prompthandler"] = "pymush.conn.PromptHandler"
+        self.classes['game']['taskentry'] = "pymush.engine.task.TaskEntry"
         self.classes["services"]["game"] = "pymush.game.GameService"
 
         self.classes["gameobject"]["EXIT"] = "pymush.db.objects.exit.Exit"
@@ -50,12 +50,14 @@ class Config(BaseConfig):
 
         m["ooc"] = {"ooc": "pymush.engine.commands.ooc.SelectCommandMatcher"}
 
-        m["ic"] = {"ic": "pymush.engine.commands.ic.SessionCommandMatcher"}
+        m["basic"] = {
+            "ic": "pymush.engine.commands.ic.SessionCommandMatcher",
+            "script": "pymush.engine.commands.scripting.ScriptCommandMatcher",
+        }
 
         m["thing"] = {
             "thing": "pymush.engine.commands.thing.ThingCommandMatcher",
             "exit": "pymush.engine.commands.thing.ThingExitMatcher",
-            "script": "pymush.engine.commands.scripting.ScriptCommandMatcher",
             "roleplay": "pymush.engine.commands.roleplay.RoleplayCommandMatcher"
         }
 

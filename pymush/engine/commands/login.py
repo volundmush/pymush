@@ -58,7 +58,7 @@ class ConnectCommand(_LoginCommand):
 
     async def execute(self):
         name, password = self.parse_login(self.usage)
-        result, err = await self.connection.check_login(self.entry, name, password)
+        result, err = await self.entry.check_login(name, password)
         if not result:
             raise CommandException(err)
 
@@ -85,7 +85,7 @@ class CreateCommand(_LoginCommand):
 
     async def execute(self):
         name, password = self.parse_login(self.usage)
-        result, err = await self.connection.create_user(self.entry, name, password)
+        result, err = await self.entry.create_user(name, password)
         if not result:
             raise CommandException(err)
 

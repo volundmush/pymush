@@ -1,10 +1,12 @@
 import sys
 import weakref
+import asyncio
 
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from typing import Union, Set, Optional, List, Dict, Tuple, Iterable
 
 from athanor.utils import lazy_property, partial_match
+from athanor.tasks import TaskMaster
 
 from mudrich.text import Text
 from mudrich.encodings.pennmush import ansi_fun, send_menu
@@ -13,10 +15,10 @@ from pymush.utils import formatter as fmt
 from pymush.utils.styling import StyleHandler
 
 
-class GameObject:
+class GameObject(TaskMaster):
     type_name = None
     unique_names = False
-    cmd_matchers = ("script",)
+    cmd_matchers = ("basic",)
     is_root_owner = False
     can_be_zone = False
     can_be_destination = False
@@ -26,6 +28,7 @@ class GameObject:
     ignore_sessionless = False
 
     def __init__(self, game: "GameService", dbid: int, created: int, name: str):
+        TaskMaster.__init__(self)
         self.game = game
         self.dbid = dbid
         self.created: int = created
@@ -65,6 +68,11 @@ class GameObject:
         self.cpu_quota: float = 0.0
         self._admin_level: Optional[int] = None
         self.style_holder: Optional[StyleHandler] = None
+
+        # queue-relevant data
+        self.queue_data: OrderedDict[int, "TaskEntry"] = OrderedDict()
+        self.wait_queue: Set["TaskEntry"] = set()
+        self._pid: int = 0
 
     @lazy_property
     def dbref(self):
@@ -434,15 +442,15 @@ class GameObject:
             return [self.session]
         return []
 
-    def can_receive_text(self, sender: "GameObject", interpreter: "Interpreter", text: Text, **kwargs) -> Tuple[bool, Optional[str]]:
+    def can_receive_text(self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs) -> Tuple[bool, Optional[str]]:
         """
         Called by most @*emit commands and *emit() functions to check if sender can speak with this Object.
 
         Overload this to implement permissions checks.
 
         Args:
+            entry (TaskEntry): The TaskEntry object of the moment.
             sender (GameObject): The sender of the message.
-            interpreter (Interpreter): The interpreter object of the moment.
             text (Text): The Text object that sender wishes self to receive.
             **kwargs: Arbitrary data for overloading.
 
@@ -451,7 +459,7 @@ class GameObject:
         """
         return True, None
 
-    def receive_text(self, sender: "GameObject", interpreter: "Interpreter", text: Text, **kwargs):
+    def receive_text(self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs):
         """
         Called by most @*emit commands and *emit() functions to handling receiving a message from sender.
 
@@ -459,8 +467,8 @@ class GameObject:
         specific text patterns.
 
         Args:
+            entry (TaskEntry): The TaskEntry object of the moment.
             sender (GameObject): The sender of the message.
-            interpreter (Interpreter): The interpreter object of the moment.
             text (Text): The Text object that sender wishes self to receive.
             **kwargs: Arbitrary data for overloading.
         """
@@ -478,20 +486,6 @@ class GameObject:
         for listener in self.listeners():
             if listener not in message.relay_chain:
                 listener.send(message.relay(self))
-
-    def access(
-        self,
-        accessor: "GameObject",
-        access_type: str,
-        default=False,
-        no_superuser_bypass=False,
-    ):
-        return self.locks.check(
-            accessor,
-            access_type,
-            default=default,
-            no_superuser_bypass=no_superuser_bypass,
-        )
 
     def receive_msg(self, message: fmt.FormatList):
         pass
@@ -557,8 +551,9 @@ class GameObject:
             pass
         return whole, words
 
-    def locate_object(
+    async def locate_object(
         self,
+        entry: "TaskEntry",
         name: Union[str, Text],
         general=True,
         dbref=True,
@@ -632,7 +627,7 @@ class GameObject:
             total_candidates = filter(lambda x: x.active(), total_candidates)
 
         if filter_visible:
-            total_candidates = filter(lambda x: self.can_perceive(x), total_candidates)
+            total_candidates = [x for x in total_candidates if await self.can_perceive(entry, x)]
 
         keywords = defaultdict(list)
         full_names = defaultdict(list)
@@ -684,16 +679,16 @@ class GameObject:
 
         return out, None
 
-    def can_perceive(self, target: "GameObject"):
+    async def can_perceive(self, entry: "TaskEntry", target: "GameObject"):
         return True
 
-    def can_interact_with(self, target: "GameObject"):
+    async def can_interact_with(self, entry: "TaskEntry", target: "GameObject"):
         return True
 
-    def render_appearance(
-        self, interpreter: "Interpreter", viewer: "GameObject", internal=False
+    async def render_appearance(
+        self, entry: "TaskEntry", viewer: "GameObject", internal=False
     ):
-        parser = interpreter.make_parser(executor=self, enactor=viewer)
+        parser = entry.parser
         out = fmt.FormatList(viewer)
 
         see_dbrefs = viewer.session.admin if viewer.session else True
@@ -708,7 +703,7 @@ class GameObject:
             return display
 
         if (nameformat := self.attributes.get_value("NAMEFORMAT")) :
-            result = parser.evaluate(
+            result = await parser.evaluate(
                 nameformat, executor=self, number_args={0: self.objid, 1: self.name}
             )
             out.add(fmt.Line(result))
@@ -716,9 +711,9 @@ class GameObject:
             out.add(fmt.Line(format_name(self)))
 
         if internal and (idesc := self.attributes.get_value("IDESCRIBE")):
-            idesc_eval = parser.evaluate(idesc, executor=self)
+            idesc_eval = await parser.evaluate(idesc, executor=self)
             if (idescformat := self.attributes.get_value("IDESCFORMAT")) :
-                result = parser.evaluate(
+                result = await parser.evaluate(
                     idescformat, executor=self, number_args=(idesc_eval,)
                 )
                 out.add(fmt.Line(result))
@@ -726,9 +721,13 @@ class GameObject:
                 out.add(fmt.Line(idesc_eval))
 
         elif (desc := self.attributes.get_value("DESCRIBE")) :
-            desc_eval = parser.evaluate(desc, executor=self)
+            try:
+                desc_eval = await parser.evaluate(desc, executor=self)
+            except Exception as err:
+                import sys, traceback
+                traceback.print_exc(file=sys.stdout)
             if (descformat := self.attributes.get_value("DESCFORMAT")) :
-                result = parser.evaluate(
+                result = await parser.evaluate(
                     descformat, executor=self, number_args=(desc_eval,)
                 )
                 out.add(fmt.Line(result))
@@ -736,9 +735,7 @@ class GameObject:
                 out.add(fmt.Line(desc_eval))
 
         if (
-            contents := filter(
-                lambda x: x.active() and viewer.can_perceive(x), self.contents
-            )
+            contents := [x for x in self.contents if x.active() and await viewer.can_perceive(entry, x)]
         ) :
             contents = sorted(
                 contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x)
@@ -746,7 +743,7 @@ class GameObject:
             if contents:
                 if (conformat := self.attributes.get_value("CONFORMAT")) :
                     contents_objids = " ".join([con.objid for con in contents])
-                    result = parser.evaluate(
+                    result = await parser.evaluate(
                         conformat, executor=self, number_args=(contents_objids,)
                     )
                     out.add(fmt.Line(result))
@@ -760,9 +757,7 @@ class GameObject:
                         out.add(fmt.Line(Text("\n").join(con)))
 
         if (
-            contents := filter(
-                lambda x: x.active() and viewer.can_perceive(x), self.namespaces["EXIT"]
-            )
+            contents := [x for x in self.namespaces['EXIT'] if x.active() and await viewer.can_perceive(entry, x)]
         ) :
             contents = sorted(
                 contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x)
@@ -770,7 +765,7 @@ class GameObject:
             if contents:
                 if (conformat := self.attributes.get_value("EXITFORMAT")) :
                     contents_objids = " ".join([con.objid for con in contents])
-                    result = parser.evaluate(
+                    result = await parser.evaluate(
                         conformat, executor=self, number_args=(contents_objids,)
                     )
                     out.add(fmt.Line(result))
@@ -782,25 +777,25 @@ class GameObject:
 
         viewer.send(out)
 
-    def find_cmd(self, entry: "QueueEntry", cmd_text: str):
+    async def find_cmd(self, entry: "TaskEntry", cmd_text: Text):
         for matcher_name in self.cmd_matchers:
             matchers = self.game.command_matchers.get(matcher_name, None)
             if matchers:
                 for matcher in matchers:
-                    if matcher and matcher.access(entry):
-                        cmd = matcher.match(entry, cmd_text)
+                    if matcher and await matcher.access(entry):
+                        cmd = await matcher.match(entry, cmd_text)
                         if cmd:
                             return cmd
 
-    def gather_help(self, entry: "QueueEntry", data):
+    async def gather_help(self, entry: "TaskEntry", data):
         for matcher_name in self.cmd_matchers:
             matchers = self.game.command_matchers.get(matcher_name, None)
             if matchers:
                 for matcher in matchers:
-                    if matcher and matcher.access(entry):
-                        matcher.populate_help(entry, data)
+                    if matcher and await matcher.access(entry):
+                        await matcher.populate_help(entry, data)
 
-    def move_to(self, destination: Optional[Union["GameObject", str, Text, int]]):
+    async def move_to(self, entry: "TaskEntry", destination: Optional[Union["GameObject", str, Text, int]]):
         """
         Placeholder method for eventual version that calls hooks.
         """
@@ -820,9 +815,6 @@ class GameObject:
 
         self.location = destination
 
-    def update(self, now: float, delta: float):
-        pass
-
     def setup(self):
         pass
 
@@ -838,7 +830,7 @@ class GameObject:
         out.remove(self)
         return out
 
-    def announce_login(self, from_linkdead: bool = False):
+    async def announce_login(self, from_linkdead: bool = False):
         if from_linkdead:
             self.msg(Text("You return from link-dead!"))
             to_send = Text(" is no longer link-dead!")
@@ -850,12 +842,12 @@ class GameObject:
             for neighbor in self.neighbors():
                 neighbor.msg(neighbor.get_dub_or_keyphrase_for(self) + to_send)
 
-    def announce_linkdead(self):
+    async def announce_linkdead(self):
         to_send = Text(" has gone link-dead!")
         for neighbor in self.neighbors():
             neighbor.msg(neighbor.get_dub_or_keyphrase_for(self) + to_send)
 
-    def announce_logout(self, from_linkdead: bool = False):
+    async def announce_logout(self, from_linkdead: bool = False):
         if from_linkdead:
             to_send = Text(" has been idled-out due to link-deadedness!")
             for neighbor in self.neighbors():
@@ -865,3 +857,55 @@ class GameObject:
             to_send = Text(" has left the game!")
             for neighbor in self.neighbors():
                 neighbor.msg(neighbor.get_dub_or_keyphrase_for(self) + to_send)
+
+    def update(self, now: float, delta: float):
+        self.queue_elapsed(now, delta)
+
+    def queue_elapsed(self, now: float, delta: float):
+        if self.wait_queue:
+            elapsed = set()
+            for entry in self.wait_queue:
+                if (now - entry.created) > entry.wait:
+                    self.queue.put_nowait((50, entry.pid))
+                    elapsed.add(entry)
+            self.wait_queue -= elapsed
+
+    async def run_task(self, task):
+        try:
+            if (entry := self.queue_data.pop(task, None)):
+                self.entry = entry
+                await entry.execute()
+        except Exception as e:
+            self.game.app.console.print_exception()
+        finally:
+            self.entry = None
+
+    async def handle_msg(self, msg: Union["GameMsg", "SessionMsg"], priority: int = 0, **kwargs):
+        task = self.game.app.classes['game']['taskentry'](self, msg, **kwargs)
+        await self.schedule_task(task, priority=priority)
+
+    async def schedule_task(self, task, priority: int = 0):
+        self._pid += 1
+        task.pid = self._pid
+        self.queue_data[self._pid] = task
+        await self._queue.put((priority, self._pid))
+
+    async def controls(self, entry: "TaskEntry", target: "GameObject"):
+        return target == self
+
+    async def see_debug(self, entry: "TaskEntry"):
+        return True
+
+    async def print_debug_cmd(self, entry: "TaskEntry", action: Text):
+        to_send = f"{entry.executor.dbref}" + "-" * entry.inline_depth + "] " + action
+        self.msg(text=to_send)
+
+    async def print_debug_eval_enter(self, entry: "TaskEntry", text: Text, bonus_depth : int = 0):
+        spaces = " " * (entry.recursion_count+bonus_depth)
+        to_send = f"{entry.executor.dbref}" + "!" + spaces + text + " :"
+        self.msg(text=to_send)
+
+    async def print_debug_eval_result(self, entry: "TaskEntry", text: Text, result: Text, bonus_depth : int = 0):
+        spaces = " " * (entry.recursion_count+1+bonus_depth)
+        to_send = f"{entry.executor.dbref}" + "!" + spaces + text + " => " + result
+        self.msg(text=to_send)

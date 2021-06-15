@@ -13,8 +13,8 @@ class AnsiFunction(_AbstractStringFunction):
     exact_args = 2
 
     async def do_execute(self):
-        codes = await self.parser.evaluate(self.args[0])
-        text = await self.parser.evaluate(self.args[1])
+        codes = await self.evaluate(self.args[0])
+        text = await self.evaluate(self.args[1])
 
         try:
             style = ansi_fun_style(codes.plain)
@@ -29,7 +29,7 @@ class ScrambleFunction(_AbstractStringFunction):
 
     async def do_execute(self):
         if self.args:
-            return await self.parser.evaluate(self.args[0]).scramble()
+            return await self.evaluate(self.args[0]).scramble()
         else:
             return Text("")
 
@@ -40,6 +40,6 @@ class ReverseFunction(_AbstractStringFunction):
 
     async def do_execute(self):
         if self.args:
-            return await self.parser.evaluate(self.args[0]).reverse()
+            return await self.evaluate(self.args[0]).reverse()
         else:
             return Text("")

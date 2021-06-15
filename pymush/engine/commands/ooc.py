@@ -79,7 +79,7 @@ class CharSelectCommand(Command):
 
     async def execute(self):
         mdict = self.match_obj.groupdict()
-        acc = self.interpreter.user
+        acc = self.entry.user
 
         if not (chars := acc.namespaces[self.character_type]):
             raise CommandException("No characters to join the game as!")
@@ -90,7 +90,7 @@ class CharSelectCommand(Command):
         if not (found := partial_match(args, chars, key=lambda x: x.name)):
             self.msg(text=f"Sorry, no character found named: {args}")
             return
-        error = await self.entry.game.create_or_join_session(self.entry, self.entry.connection, found)
+        error = await self.entry.game.create_or_join_session(self.entry, found)
         if error:
             raise CommandException(error)
 
@@ -100,39 +100,30 @@ class SelectScreenCommand(Command):
     re_match = re.compile(r"^(?P<cmd>look)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
 
     async def execute(self):
-        await self.connection.show_select_screen(self.entry)
+        await self.executor.show_select_screen(self.executor)
 
 
-class ThinkCommand(MushCommand):
-    name = "think"
-    aliases = ["th", "thi", "thin"]
+class LogoutCommand(Command):
+    name = "look"
+    re_match = re.compile(r"^(?P<cmd>@logout)(?: +(?P<args>.+)?)?", flags=re.IGNORECASE)
     help_category = "System"
 
     async def execute(self):
-        if self.args:
-            result, remaining, stopped = self.entry.evaluate(self.remaining)
-            if result:
-                self.msg(text=result)
-
-
-class LogoutCommand(MushCommand):
-    name = "@logout"
-    aliases = ["@logo", "@logou"]
-    help_category = "System"
-
-    async def execute(self):
-        await self.executor.logout(self.entry)
-        await self.executor.show_welcome_screen(self.entry)
+        await self.executor.logout(self.executor)
+        await self.executor.show_welcome_screen(self.executor)
 
 
 class OOCPyCommand(PyCommand):
+
     @classmethod
-    async def access(cls, interpreter):
-        return interpreter.user.get_alevel() >= 10
+    async def access(cls, entry):
+        return entry.user.get_alevel() >= 10
 
     def available_vars(self):
         out = super().available_vars()
         out["user"] = self.entry.user
+        out["connection"] = self.entry
+        out["game"] = self.entry.game
         return out
 
 
@@ -144,7 +135,6 @@ class SelectCommandMatcher(PythonCommandMatcher):
         self.add(CharSelectCommand)
         self.add(CharCreateCommand)
         self.add(SelectScreenCommand)
-        self.add(ThinkCommand)
         self.add(PennBindCommand)
         self.add(HelpCommand)
         self.add(LogoutCommand)
