@@ -1,6 +1,5 @@
 import sys
 import weakref
-import asyncio
 
 from collections import defaultdict, OrderedDict
 from typing import Union, Set, Optional, List, Dict, Tuple, Iterable
@@ -16,33 +15,56 @@ from pymush.utils.styling import StyleHandler
 
 
 class GameObject(TaskMaster):
+    """
+    The GameObject is the basic building block of the game database.
+    """
     type_name = None
+    # Sometimes only one object of a name can exist. Mostly used for User Accounts.
     unique_names = False
+    # The matchers this object will use if it searches for a command.
     cmd_matchers = ("basic",)
+    # root owners 'own themselves'. They are the source of ownership. Example: User Accounts.
     is_root_owner = False
+    # objects that can be zones can tie groups of other objects together.
     can_be_zone = False
+    # Objects that can be destinations can be pointed at by exits. Usually just Rooms.
     can_be_destination = False
+    # Exits can have destinations. Should something else?
     can_have_destination = False
+    # Whether this object can be puppeted by a Session. Not necessarily just for players!
     can_be_puppet = False
+    # Whether an object will simply never be anywhere.
     no_location = False
+    # TODO: What does this do again?
     ignore_sessionless = False
 
     def __init__(self, game: "GameService", dbid: int, created: int, name: str):
         TaskMaster.__init__(self)
+        # has ref back to the game service for API calls.
         self.game = game
+
+        # basic information used for the object's identification in the database.
         self.dbid = dbid
         self.created: int = created
         self.modified: int = created
+
+        # Names are string-interned to save space in the event of a thousand exits named 'North'.
         self._name = sys.intern(name)
         self.aliases: List[str] = list()
+
+        #object parents are used for inheritance of Attributes and other traits.
         self._parent: Optional[GameObject] = None
         self._parent_of: weakref.WeakValueDictionary[
             str, GameObject
         ] = weakref.WeakValueDictionary()
+
+        # zones logically group objects together.
         self._zone: Optional[GameObject] = None
         self._zone_of: weakref.WeakValueDictionary[
             str, GameObject
         ] = weakref.WeakValueDictionary()
+
+        # All objects are owned by something - except root owners, which effectively own themselves.
         self._owner: Optional[GameObject] = None
         self._owner_of: weakref.WeakValueDictionary[
             str, GameObject
@@ -50,23 +72,37 @@ class GameObject(TaskMaster):
         self._owner_of_type: Dict[str, weakref.WeakValueDictionary] = defaultdict(
             weakref.WeakValueDictionary
         )
+
+        # Objects assigned to a namespace must have unique names within that namespace, if they share a TYPE.
+        # For example, Exits within the same room are namespaced to the room.
         self.namespaces: Dict[str, weakref.WeakSet] = defaultdict(weakref.WeakSet)
         self._namespace: Optional[GameObject] = None
+
+        # Some objects can have sessions attached.
         self.session: Optional["GameSession"] = None
         self.account_sessions: Set["GameSession"] = weakref.WeakSet()
-        self.connections: Set["Connection"] = set()
-        self.attributes = game.app.classes["game"]["attributehandler"](
-            self, self.game.attributes
-        )
+
+        # sys attributes are used to store unique data used internally by the system, like account passwords.
         self.sys_attributes = dict()
+
+        # some objects may have a location.
         self._location: Optional[GameObject] = None
         self._location_of: weakref.WeakValueDictionary[
             str, GameObject
         ] = weakref.WeakValueDictionary()
+
+        # Exits have destinations.
         self._destination: Optional[GameObject] = None
+
+        # Quota allows the object to execute MUSHcode and build other objects.
         self.db_quota: int = 0
         self.cpu_quota: float = 0.0
+
+        # The admin level is this object's permissions and privileges. If None, it inherits from global
+        # defaults.
         self._admin_level: Optional[int] = None
+
+        # Used to store default colors and display formats for various things.
         self.style_holder: Optional[StyleHandler] = None
 
         # queue-relevant data
@@ -82,6 +118,13 @@ class GameObject(TaskMaster):
     def objid(self):
         return f"#{self.dbid}:{int(self.created)}"
 
+    @lazy_property
+    def attributes(self):
+        """
+        Lazy property handler for this object's Attributes.
+        """
+        return self.game.app.classes["game"]["attributehandler"](self, self.game.attributes)
+
     @property
     def name(self):
         return self._name
@@ -90,8 +133,12 @@ class GameObject(TaskMaster):
     def name(self, value: Union[str, Text]):
         plain = value.plain if isinstance(value, Text) else value
         plain = plain.strip()
+
+        # Make sure the name entered is valid. Nothing gibberish.
         if not self.game.app.config.regex["basic_name"].match(plain):
             raise ValueError("Name contains invalid characters!")
+
+        # Sometimes only one object of a name can exist. Mostly used for User Accounts.
         if self.unique_names:
             found, err = self.game.search_objects(
                 plain, self.game.type_index[self.type_name], exact=True, aliases=True
@@ -149,6 +196,7 @@ class GameObject(TaskMaster):
     @property
     def root_owner(self):
         if self.is_root_owner:
+            # TODO: Maybe this should be self instead?
             return None
         owner = self.owner
         while owner is not None:
@@ -420,9 +468,6 @@ class GameObject(TaskMaster):
         if self.parent:
             out["parent"] = self.parent.objid
 
-        if self.locks:
-            out["locks"] = self.locks.serialize()
-
         if self.namespace:
             out["namespace"] = self.namespace.objid
 
@@ -442,7 +487,7 @@ class GameObject(TaskMaster):
             return [self.session]
         return []
 
-    def can_receive_text(self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs) -> Tuple[bool, Optional[str]]:
+    async def can_receive_text(self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs) -> Tuple[bool, Optional[str]]:
         """
         Called by most @*emit commands and *emit() functions to check if sender can speak with this Object.
 
@@ -459,7 +504,7 @@ class GameObject(TaskMaster):
         """
         return True, None
 
-    def receive_text(self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs):
+    async def receive_text(self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs):
         """
         Called by most @*emit commands and *emit() functions to handling receiving a message from sender.
 
@@ -866,7 +911,7 @@ class GameObject(TaskMaster):
             elapsed = set()
             for entry in self.wait_queue:
                 if (now - entry.created) > entry.wait:
-                    self.queue.put_nowait((50, entry.pid))
+                    self._queue.put_nowait((50, entry.pid))
                     elapsed.add(entry)
             self.wait_queue -= elapsed
 
