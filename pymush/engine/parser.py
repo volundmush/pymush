@@ -201,7 +201,9 @@ class Parser:
     re_inum = re.compile(r"^%i_(?P<num>\d+)", flags=re.IGNORECASE)
     re_numeric = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
-    def __init__(self, entry, executor: "GameObject", enactor: "GameObject", caller: "GameObject"):
+    def __init__(
+        self, entry, executor: "GameObject", enactor: "GameObject", caller: "GameObject"
+    ):
         self.entry = entry
         f = StackFrame(parser=self, executor=executor, enactor=enactor, caller=caller)
         self.stack = [f]
@@ -284,10 +286,10 @@ class Parser:
         text: Union[None, str, Text],
         called_recursively: bool = False,
         no_eval: bool = False,
-        debug_objs = None,
-        debug_display_input = False,
-        bonus_depth = 0,
-        **kwargs
+        debug_objs=None,
+        debug_display_input=False,
+        bonus_depth=0,
+        **kwargs,
     ):
 
         if not text:
@@ -304,13 +306,15 @@ class Parser:
 
         if debug_objs is None:
             debug_objs = set()
-            if await self.entry.holder.controls(self, self.executor) and await self.entry.holder.see_debug(self):
+            if await self.entry.holder.controls(
+                self, self.executor
+            ) and await self.entry.holder.see_debug(self):
                 debug_objs.add(self.entry.holder)
             if await self.executor.see_debug(self):
                 debug_objs.add(self.executor)
 
         if debug_display_input:
-            debug_text = text if not called_recursively else '[' + text + ']'
+            debug_text = text if not called_recursively else "[" + text + "]"
             bonus_depth += 1
             if debug_objs:
                 for obj in debug_objs:
@@ -359,7 +363,9 @@ class Parser:
                             if i > segment_start:
                                 output += text[segment_start:i]
                             output += await self.evaluate(
-                                text[i + 1 : closing], called_recursively=True, debug_objs=set(debug_objs)
+                                text[i + 1 : closing],
+                                called_recursively=True,
+                                debug_objs=set(debug_objs),
                             )
                             segment_start = closing + 1
                             i = closing + 1
@@ -396,14 +402,18 @@ class Parser:
                                         )
                                         break
                                     else:
-                                        full_call = text[f_match.start():closing + 1]
-                                        args = text[i + 1: closing]
+                                        full_call = text[f_match.start() : closing + 1]
+                                        args = text[i + 1 : closing]
                                         ready_fun = func(
-                                            self.entry, func_name, args, full_call, debug_objs
+                                            self.entry,
+                                            func_name,
+                                            args,
+                                            full_call,
+                                            debug_objs,
                                         )
 
                                         output = await ready_fun.execute()
-                                        #for obj in debug_objs:
+                                        # for obj in debug_objs:
                                         #    await obj.print_debug_eval_result(self.entry, full_call, result=output)
                                 segment_start = closing + 1
                                 i = closing + 1
@@ -416,11 +426,13 @@ class Parser:
                             if i > segment_start:
                                 output += text[segment_start:i]
                             length, sub = results
-                            full_sub = text[i:i+length]
+                            full_sub = text[i : i + length]
                             results = self.frame.eval_sub(sub[0], sub[1])
                             if debug_objs:
                                 for obj in debug_objs:
-                                    await obj.print_debug_eval_result(self.entry, full_sub, result=results)
+                                    await obj.print_debug_eval_result(
+                                        self.entry, full_sub, result=results
+                                    )
                             output += results
                             i += length
                             segment_start = i

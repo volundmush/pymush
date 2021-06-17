@@ -2,10 +2,12 @@ from typing import Optional
 
 # Install Rich handling of console shenanigans.
 from mudrich import pretty
+
 pretty.install()
 
 # Rich can handle untrapped tracebacks. Why not?
 from mudrich import traceback
+
 traceback.install()
 
 from mudrich.console import Console

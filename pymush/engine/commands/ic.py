@@ -62,7 +62,7 @@ class SessionPyCommand(PyCommand):
         out["executor"] = self.entry.executor
         out["enactor"] = self.entry.enactor
         out["caller"] = self.entry.caller
-        out['connection'] = self.entry.connection
+        out["connection"] = self.entry.connection
         out["session"] = self.entry.session
         out["game"] = self.entry.game
         return out

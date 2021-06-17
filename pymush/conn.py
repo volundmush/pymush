@@ -38,7 +38,7 @@ COLOR_MAP = {
     ColorSystem.WINDOWS: "windows",
 }
 
-GameMsg = namedtuple("GameMsg", ['cmd', 'args', 'kwargs'])
+GameMsg = namedtuple("GameMsg", ["cmd", "args", "kwargs"])
 SessionMsg = namedtuple("SessionMsg", ["connection", "msg"])
 
 
@@ -62,7 +62,7 @@ class Connection(BaseConnection):
         self.console.highlighter = _null_highlighter
         self.menu = None
         self.conn_style = StyleHandler(self, save=False)
-        self._print_mode = 'line'
+        self._print_mode = "line"
 
     @property
     def executor(self):
@@ -117,9 +117,9 @@ class Connection(BaseConnection):
             await self.handle_msg(task)
 
     async def handle_msg(self, task: GameMsg):
-        if task.cmd.lower() in ('line', 'text'):
+        if task.cmd.lower() in ("line", "text"):
             cmd_text = Text(task.args[0].strip())
-            if cmd_text.plain.upper() == 'IDLE':
+            if cmd_text.plain.upper() == "IDLE":
                 return
             if self.user:
                 cmd = await self.find_selectscreen_cmd(cmd_text)
@@ -139,15 +139,15 @@ class Connection(BaseConnection):
                 self.msg(text="Huh? (Type 'help' for help.)")
 
     def print(self, *args, **kwargs):
-        self._print_mode = 'line'
+        self._print_mode = "line"
         self.console.print(*args, highlight=False, **kwargs)
 
     def print_prompt(self, *args, **kwargs):
-        self._print_mode = 'prompt'
+        self._print_mode = "prompt"
         self.console.print(*args, highlight=False, **kwargs)
 
     def print_text(self, *args, **kwargs):
-        self._print_mode = 'text'
+        self._print_mode = "text"
         self.console.print(*args, highlight=False, **kwargs)
 
     def print_exception(self, trace):
@@ -182,7 +182,9 @@ class Connection(BaseConnection):
     def receive_msg(self, message: fmt.FormatList):
         message.send(self)
 
-    async def create_user(self, entry: "TaskEntry", name: str, password: str) -> Tuple[bool, Optional[Text]]:
+    async def create_user(
+        self, entry: "TaskEntry", name: str, password: str
+    ) -> Tuple[bool, Optional[Text]]:
         pass_hash = self.game.crypt_con.hash(password)
         user, error = await self.game.create_object(entry, "USER", name)
         if error:
@@ -196,7 +198,9 @@ class Connection(BaseConnection):
         )
         self.msg(text="User Account created! You can login with " + ansi_fun("hw", cmd))
 
-    async def check_login(self, name: str, password: str) -> Tuple[bool, Optional[Text]]:
+    async def check_login(
+        self, name: str, password: str
+    ) -> Tuple[bool, Optional[Text]]:
         candidates = self.game.type_index["USER"]
         user, error = self.game.search_objects(name, candidates=candidates, exact=True)
         if error:

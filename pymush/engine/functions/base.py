@@ -18,7 +18,9 @@ class BaseFunction(BaseApi):
     eval_args = True
     help_category = None
 
-    def __init__(self, entry, called_as: str, args_data: Text, full_call: Text, debug_objs):
+    def __init__(
+        self, entry, called_as: str, args_data: Text, full_call: Text, debug_objs
+    ):
         self.entry = entry
         self.full_call = full_call
         self.called_as = called_as
@@ -140,7 +142,7 @@ class BaseFunction(BaseApi):
         if self.odd_args and c % 2 == 0:
             return self._err_even_args(c)
         output = await self.do_execute()
-        #for obj in self.debug_objs:
+        # for obj in self.debug_objs:
         #    await obj.print_debug_eval_result(self.entry, self.full_call, result=output, bonus_depth=-1)
         return output
 

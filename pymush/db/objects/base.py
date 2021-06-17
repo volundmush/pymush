@@ -18,6 +18,7 @@ class GameObject(TaskMaster):
     """
     The GameObject is the basic building block of the game database.
     """
+
     type_name = None
     # Sometimes only one object of a name can exist. Mostly used for User Accounts.
     unique_names = False
@@ -52,7 +53,7 @@ class GameObject(TaskMaster):
         self._name = sys.intern(name)
         self.aliases: List[str] = list()
 
-        #object parents are used for inheritance of Attributes and other traits.
+        # object parents are used for inheritance of Attributes and other traits.
         self._parent: Optional[GameObject] = None
         self._parent_of: weakref.WeakValueDictionary[
             str, GameObject
@@ -123,7 +124,9 @@ class GameObject(TaskMaster):
         """
         Lazy property handler for this object's Attributes.
         """
-        return self.game.app.classes["game"]["attributehandler"](self, self.game.attributes)
+        return self.game.app.classes["game"]["attributehandler"](
+            self, self.game.attributes
+        )
 
     @property
     def name(self):
@@ -487,7 +490,9 @@ class GameObject(TaskMaster):
             return [self.session]
         return []
 
-    async def can_receive_text(self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs) -> Tuple[bool, Optional[str]]:
+    async def can_receive_text(
+        self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs
+    ) -> Tuple[bool, Optional[str]]:
         """
         Called by most @*emit commands and *emit() functions to check if sender can speak with this Object.
 
@@ -504,7 +509,9 @@ class GameObject(TaskMaster):
         """
         return True, None
 
-    async def receive_text(self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs):
+    async def receive_text(
+        self, entry: "TaskEntry", sender: "GameObject", text: Text, **kwargs
+    ):
         """
         Called by most @*emit commands and *emit() functions to handling receiving a message from sender.
 
@@ -672,7 +679,9 @@ class GameObject(TaskMaster):
             total_candidates = filter(lambda x: x.active(), total_candidates)
 
         if filter_visible:
-            total_candidates = [x for x in total_candidates if await self.can_perceive(entry, x)]
+            total_candidates = [
+                x for x in total_candidates if await self.can_perceive(entry, x)
+            ]
 
         keywords = defaultdict(list)
         full_names = defaultdict(list)
@@ -770,6 +779,7 @@ class GameObject(TaskMaster):
                 desc_eval = await parser.evaluate(desc, executor=self)
             except Exception as err:
                 import sys, traceback
+
                 traceback.print_exc(file=sys.stdout)
             if (descformat := self.attributes.get_value("DESCFORMAT")) :
                 result = await parser.evaluate(
@@ -780,7 +790,11 @@ class GameObject(TaskMaster):
                 out.add(fmt.Line(desc_eval))
 
         if (
-            contents := [x for x in self.contents if x.active() and await viewer.can_perceive(entry, x)]
+            contents := [
+                x
+                for x in self.contents
+                if x.active() and await viewer.can_perceive(entry, x)
+            ]
         ) :
             contents = sorted(
                 contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x)
@@ -802,7 +816,11 @@ class GameObject(TaskMaster):
                         out.add(fmt.Line(Text("\n").join(con)))
 
         if (
-            contents := [x for x in self.namespaces['EXIT'] if x.active() and await viewer.can_perceive(entry, x)]
+            contents := [
+                x
+                for x in self.namespaces["EXIT"]
+                if x.active() and await viewer.can_perceive(entry, x)
+            ]
         ) :
             contents = sorted(
                 contents, key=lambda x: viewer.get_dub_or_keyphrase_for(x)
@@ -840,7 +858,11 @@ class GameObject(TaskMaster):
                     if matcher and await matcher.access(entry):
                         await matcher.populate_help(entry, data)
 
-    async def move_to(self, entry: "TaskEntry", destination: Optional[Union["GameObject", str, Text, int]]):
+    async def move_to(
+        self,
+        entry: "TaskEntry",
+        destination: Optional[Union["GameObject", str, Text, int]],
+    ):
         """
         Placeholder method for eventual version that calls hooks.
         """
@@ -871,7 +893,7 @@ class GameObject(TaskMaster):
         if self.location:
             out.update(self.location.contents)
             if include_exits:
-                out.update(self.location.namespaces['EXIT'])
+                out.update(self.location.namespaces["EXIT"])
         out.remove(self)
         return out
 
@@ -917,7 +939,7 @@ class GameObject(TaskMaster):
 
     async def run_task(self, task):
         try:
-            if (entry := self.queue_data.pop(task, None)):
+            if (entry := self.queue_data.pop(task, None)) :
                 self.entry = entry
                 await entry.execute()
         except Exception as e:
@@ -925,8 +947,10 @@ class GameObject(TaskMaster):
         finally:
             self.entry = None
 
-    async def handle_msg(self, msg: Union["GameMsg", "SessionMsg"], priority: int = 0, **kwargs):
-        task = self.game.app.classes['game']['taskentry'](self, msg, **kwargs)
+    async def handle_msg(
+        self, msg: Union["GameMsg", "SessionMsg"], priority: int = 0, **kwargs
+    ):
+        task = self.game.app.classes["game"]["taskentry"](self, msg, **kwargs)
         await self.schedule_task(task, priority=priority)
 
     async def schedule_task(self, task, priority: int = 0):
@@ -945,12 +969,16 @@ class GameObject(TaskMaster):
         to_send = f"{entry.executor.dbref}" + "-" * entry.inline_depth + "] " + action
         self.msg(text=to_send)
 
-    async def print_debug_eval_enter(self, entry: "TaskEntry", text: Text, bonus_depth : int = 0):
-        spaces = " " * (entry.recursion_count+bonus_depth)
+    async def print_debug_eval_enter(
+        self, entry: "TaskEntry", text: Text, bonus_depth: int = 0
+    ):
+        spaces = " " * (entry.recursion_count + bonus_depth)
         to_send = f"{entry.executor.dbref}" + "!" + spaces + text + " :"
         self.msg(text=to_send)
 
-    async def print_debug_eval_result(self, entry: "TaskEntry", text: Text, result: Text, bonus_depth : int = 0):
-        spaces = " " * (entry.recursion_count+1+bonus_depth)
+    async def print_debug_eval_result(
+        self, entry: "TaskEntry", text: Text, result: Text, bonus_depth: int = 0
+    ):
+        spaces = " " * (entry.recursion_count + 1 + bonus_depth)
         to_send = f"{entry.executor.dbref}" + "!" + spaces + text + " => " + result
         self.msg(text=to_send)

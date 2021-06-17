@@ -5,7 +5,6 @@ from pymush.db.attributes import AttributeRequestType, AttributeRequest
 
 
 class BaseApi:
-
     @property
     def parser(self):
         return self.entry.parser
@@ -59,7 +58,9 @@ class BaseApi:
                 elif c == "\\":
                     escaped = True
                 elif c == ",":
-                    yield await self.parser.evaluate(text[start_segment:i], no_eval=True)
+                    yield await self.parser.evaluate(
+                        text[start_segment:i], no_eval=True
+                    )
                     start_segment = i + 1
             i += 1
 
@@ -142,7 +143,9 @@ class BaseApi:
             obj = obj.strip()
             if not obj:
                 return None, None, "Must enter an Object to search for!"
-            results, err = await self.executor.locate_object(self.entry, name=obj, first_only=True)
+            results, err = await self.executor.locate_object(
+                self.entry, name=obj, first_only=True
+            )
             if results:
                 obj = results[0]
             else:

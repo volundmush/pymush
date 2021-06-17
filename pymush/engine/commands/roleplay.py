@@ -9,7 +9,7 @@ from .base import MushCommand, CommandException, PythonCommandMatcher
 
 
 class _RoleplayCommand(MushCommand):
-    help_category = 'Roleplay'
+    help_category = "Roleplay"
 
     def distribute(self, targets: Iterable["GameObject"], to_send: Text):
         if not to_send:
@@ -19,59 +19,87 @@ class _RoleplayCommand(MushCommand):
             return
 
         for target in targets:
-            can_send, err = target.can_receive_text(self.executor, self.interpreter, to_send, mode=self.name)
+            can_send, err = target.can_receive_text(
+                self.executor, self.interpreter, to_send, mode=self.name
+            )
             if not can_send:
                 continue
             target.receive_text(self.executor, self.interpreter, to_send)
 
 
 class SayCommand(MushCommand):
-    name = 'say'
+    name = "say"
 
     async def execute(self):
         end_quote = Text('"')
         to_send = await self.parser.evaluate(self.args)
         you_see = Text('You say, "') + to_send + end_quote
-        self.executor.receive_text(self.executor, self.interpreter, you_see, mode=self.name)
+        self.executor.receive_text(
+            self.executor, self.interpreter, you_see, mode=self.name
+        )
 
         for neighbor in self.executor.neighbors(include_exits=True):
-            neighbor_sees = Text(f'{neighbor.get_dub_or_keyphrase_for(self.executor)} says, "') + to_send + end_quote
-            can_send, err = neighbor.can_receive_text(self.executor, self.interpreter, neighbor_sees, mode=self.name)
+            neighbor_sees = (
+                Text(f'{neighbor.get_dub_or_keyphrase_for(self.executor)} says, "')
+                + to_send
+                + end_quote
+            )
+            can_send, err = neighbor.can_receive_text(
+                self.executor, self.interpreter, neighbor_sees, mode=self.name
+            )
             if not can_send:
                 continue
-            neighbor.receive_text(self.executor, self.interpreter, neighbor_sees, mode=self.name)
+            neighbor.receive_text(
+                self.executor, self.interpreter, neighbor_sees, mode=self.name
+            )
 
 
 class PoseCommand(MushCommand):
-    name = 'pose'
+    name = "pose"
 
     async def execute(self):
         to_send = await self.parser.evaluate(self.args)
-        you_see = Text('You ') + to_send
-        self.executor.receive_text(self.executor, self.interpreter, you_see, mode=self.name)
+        you_see = Text("You ") + to_send
+        self.executor.receive_text(
+            self.executor, self.interpreter, you_see, mode=self.name
+        )
 
         for neighbor in self.executor.neighbors(include_exits=True):
-            neighbor_sees = Text(f'{neighbor.get_dub_or_keyphrase_for(self.executor)} ') + to_send
-            can_send, err = neighbor.can_receive_text(self.executor, self.interpreter, neighbor_sees, mode=self.name)
+            neighbor_sees = (
+                Text(f"{neighbor.get_dub_or_keyphrase_for(self.executor)} ") + to_send
+            )
+            can_send, err = neighbor.can_receive_text(
+                self.executor, self.interpreter, neighbor_sees, mode=self.name
+            )
             if not can_send:
                 continue
-            neighbor.receive_text(self.executor, self.interpreter, neighbor_sees, mode=self.name)
+            neighbor.receive_text(
+                self.executor, self.interpreter, neighbor_sees, mode=self.name
+            )
 
 
 class SemiPoseCommand(MushCommand):
-    name = 'semipose'
+    name = "semipose"
 
     async def execute(self):
         to_send = await self.parser.evaluate(self.args)
-        you_see = Text('You') + to_send
-        self.executor.receive_text(self.executor, self.interpreter, you_see, mode=self.name)
+        you_see = Text("You") + to_send
+        self.executor.receive_text(
+            self.executor, self.interpreter, you_see, mode=self.name
+        )
 
         for neighbor in self.executor.neighbors(include_exits=True):
-            neighbor_sees = Text(f'{neighbor.get_dub_or_keyphrase_for(self.executor)}') + to_send
-            can_send, err = neighbor.can_receive_text(self.executor, self.interpreter, neighbor_sees, mode=self.name)
+            neighbor_sees = (
+                Text(f"{neighbor.get_dub_or_keyphrase_for(self.executor)}") + to_send
+            )
+            can_send, err = neighbor.can_receive_text(
+                self.executor, self.interpreter, neighbor_sees, mode=self.name
+            )
             if not can_send:
                 continue
-            neighbor.receive_text(self.executor, self.interpreter, neighbor_sees, mode=self.name)
+            neighbor.receive_text(
+                self.executor, self.interpreter, neighbor_sees, mode=self.name
+            )
 
 
 class RoleplayCommandMatcher(PythonCommandMatcher):

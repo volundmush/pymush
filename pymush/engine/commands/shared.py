@@ -56,7 +56,6 @@ class PyCommand(Command):
             except Exception:
                 pycode_compiled = compile(args, "", "exec")
 
-
             measure_time = True
 
             if measure_time:

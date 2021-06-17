@@ -47,9 +47,7 @@ class DoListCommand(_ScriptCommand):
         nobreak = "nobreak" in self.switches
 
         for i, elem in enumerate(elements):
-            self.entry.inline(
-                rsargs, nobreak=nobreak, dnum=i, dvar=elem
-            )
+            self.entry.inline(rsargs, nobreak=nobreak, dnum=i, dvar=elem)
 
 
 class AssertCommand(_ScriptCommand):
@@ -74,7 +72,6 @@ class BreakCommand(_ScriptCommand):
             if rsargs:
                 self.entry.inline(rsargs)
             self.entry.parser.frame.break_after = True
-
 
 
 class TriggerCommand(_ScriptCommand):
@@ -102,8 +99,12 @@ class IncludeCommand(_ScriptCommand):
                 f"{self.name} cannot use that attribute. Is it accessible, and an action list?"
             )
 
-        number_args = [await self.parser.evaluate(arg) for arg in self.split_cmd_args(rsargs)]
-        await self.entry.inline(actions, nobreak='nobreak' in self.switches, number_args=number_args)
+        number_args = [
+            await self.parser.evaluate(arg) for arg in self.split_cmd_args(rsargs)
+        ]
+        await self.entry.inline(
+            actions, nobreak="nobreak" in self.switches, number_args=number_args
+        )
 
 
 class SwitchCommand(_ScriptCommand):
@@ -169,7 +170,6 @@ class SetCommand(_ScriptCommand):
 
 
 class _EmitCommand(_ScriptCommand):
-
     def send_to_targets(self, targets: Iterable["GameObject"], to_send: Text):
         if not to_send:
             self.executor.msg("Nothing to send.")
@@ -178,7 +178,9 @@ class _EmitCommand(_ScriptCommand):
             self.executor.msg("Nobody to hear it.")
 
         for target in targets:
-            can_send, err = target.can_receive_text(self.executor, self.interpreter, to_send)
+            can_send, err = target.can_receive_text(
+                self.executor, self.interpreter, to_send
+            )
             if not can_send:
                 self.executor.msg(err)
                 continue
@@ -186,8 +188,8 @@ class _EmitCommand(_ScriptCommand):
 
 
 class PemitCommand(_EmitCommand):
-    name = '@pemit'
-    aliases = ['@pe', '@pem', '@pemi']
+    name = "@pemit"
+    aliases = ["@pe", "@pem", "@pemi"]
 
     async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
@@ -203,8 +205,8 @@ class PemitCommand(_EmitCommand):
 
 
 class RemitCommand(_EmitCommand):
-    name = '@remit'
-    aliases = ['@re', '@rem', '@remi']
+    name = "@remit"
+    aliases = ["@re", "@rem", "@remi"]
 
     async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
@@ -219,14 +221,14 @@ class RemitCommand(_EmitCommand):
 
         targets = weakref.WeakSet()
         targets.update(obj.contents)
-        targets.update(obj.namespaces['EXIT'])
+        targets.update(obj.namespaces["EXIT"])
 
         self.send_to_targets(targets, await self.parser.evaluate(rsargs))
 
 
 class OemitCommand(_EmitCommand):
-    name = '@oemit'
-    aliases = ['@oe', '@oem', '@oemi']
+    name = "@oemit"
+    aliases = ["@oe", "@oem", "@oemi"]
 
     async def execute(self):
         lsargs, rsargs = self.eqsplit_args(self.args)
@@ -244,12 +246,14 @@ class OemitCommand(_EmitCommand):
             self.executor.msg("Nothing would hear it.")
             return
 
-        self.send_to_targets(obj.neighbors(include_exits=True), await self.parser.evaluate(rsargs))
+        self.send_to_targets(
+            obj.neighbors(include_exits=True), await self.parser.evaluate(rsargs)
+        )
 
 
 class EmitCommand(_EmitCommand):
-    name = '@emit'
-    aliases = ['@em', '@emi']
+    name = "@emit"
+    aliases = ["@em", "@emi"]
 
     async def execute(self):
         obj = self.executor
@@ -277,7 +281,7 @@ class ScriptCommandMatcher(PythonCommandMatcher):
             PemitCommand,
             RemitCommand,
             OemitCommand,
-            EmitCommand
+            EmitCommand,
         ]
         for cmd in cmds:
             self.add(cmd)

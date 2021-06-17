@@ -18,8 +18,8 @@ class LookCommand(MushCommand):
         if self.args:
             arg = self.args
             if len(arg):
-                found, err = await enactor.locate_object(self.entry,
-                    arg.plain, first_only=True, multi_match=True
+                found, err = await enactor.locate_object(
+                    self.entry, arg.plain, first_only=True, multi_match=True
                 )
                 if found:
                     await self.look_at(found[0])
@@ -79,26 +79,22 @@ class ExitCommand(Command):
             raise CommandException("Sorry, that's going nowhere fast.")
 
         out_here = fmt.FormatList(ex)
-        out_here.add(
-            fmt.Line(f"{self.enactor.name} heads over to {des[0].name}.")
-        )
+        out_here.add(fmt.Line(f"{self.enactor.name} heads over to {des[0].name}."))
 
         out_there = fmt.FormatList(ex)
         loc = self.enactor.location
 
         if not loc:
-            out_there.add(
-                fmt.Line(f"{self.enactor.name} arrives from somewhere...")
-            )
+            out_there.add(fmt.Line(f"{self.enactor.name} arrives from somewhere..."))
         else:
-            out_there.add(
-                fmt.Line(f"{self.enactor.name} arrives from {loc[0].name}")
-            )
+            out_there.add(fmt.Line(f"{self.enactor.name} arrives from {loc[0].name}"))
         if des:
             des[0].send(out_there)
         self.enactor.move_to(des[0], inventory=des[1], coordinates=des[2])
         if des:
-            await des[0].render_appearance(self.entry, self.enactor, self.parser, internal=True)
+            await des[0].render_appearance(
+                self.entry, self.enactor, self.parser, internal=True
+            )
         if loc:
             loc[0].send(out_here)
 
@@ -121,7 +117,8 @@ class ThingExitMatcher(BaseCommandMatcher):
             exits = loc.namespaces["EXIT"]
             if not exits:
                 return
-            found, err = await ex.locate_object(entry,
+            found, err = await ex.locate_object(
+                entry,
                 text,
                 general=False,
                 dbref=False,

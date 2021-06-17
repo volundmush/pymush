@@ -59,8 +59,8 @@ class CharCreateCommand(Command):
         if not (name := mdict.get("args", None)):
             raise CommandException("Must enter a name for the character!")
         user = self.entry.user
-        char, error = await self.game.create_object(self.entry,
-            self.character_type, name, namespace=user, owner=user
+        char, error = await self.game.create_object(
+            self.entry, self.character_type, name, namespace=user, owner=user
         )
         if error:
             raise CommandException(error)
@@ -114,7 +114,6 @@ class LogoutCommand(Command):
 
 
 class OOCPyCommand(PyCommand):
-
     @classmethod
     async def access(cls, entry):
         return entry.user.get_alevel() >= 10

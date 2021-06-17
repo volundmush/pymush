@@ -30,7 +30,6 @@ class CPUTimeExceeded(TaskException):
 
 
 class BaseExecutableTask:
-
     async def execute(self, entry: "TaskEntry"):
         pass
 
@@ -50,8 +49,14 @@ class ActionListTask:
 
 
 class TaskEntry:
-    def __init__(self, holder: "GameObject", task, script: bool = True,
-                 enactor: Optional["GameObject"] = None, caller: Optional["GameObject"] = None):
+    def __init__(
+        self,
+        holder: "GameObject",
+        task,
+        script: bool = True,
+        enactor: Optional["GameObject"] = None,
+        caller: Optional["GameObject"] = None,
+    ):
         self.pid = None
         self.holder = holder
         self.connection = None
@@ -62,21 +67,23 @@ class TaskEntry:
         self.created: Optional[float] = time.time()
         self.function_invocation_count = 0
         self.recursion_count = 0
-        self.parser = Parser(self, executor=holder, enactor=enactor or holder, caller=caller or holder)
+        self.parser = Parser(
+            self, executor=holder, enactor=enactor or holder, caller=caller or holder
+        )
         self.inline_depth = -1
         self.script = script
 
     @property
     def max_cpu_time(self):
-        return self.game.options.get('max_cpu_time', 4.0)
+        return self.game.options.get("max_cpu_time", 4.0)
 
     @property
     def function_recursion_limit(self):
-        return self.game.options.get('function_recursion_limit', 3000)
+        return self.game.options.get("function_recursion_limit", 3000)
 
     @property
     def function_invocation_limit(self):
-        return self.game.options.get('function_invocation_limit', 10000)
+        return self.game.options.get("function_invocation_limit", 10000)
 
     @property
     def game(self):
@@ -144,16 +151,16 @@ class TaskEntry:
         if i > start_segment:
             yield actions[start_segment:i].squish_spaces()
 
-    valid_prefixes = {'}', ']', '|'}
+    valid_prefixes = {"}", "]", "|"}
 
     def parse_prefixes(self, prefixes: Set[str]) -> dict:
         out = dict()
-        if '}' in prefixes:
-            out['debug'] = True
-        if ']' in prefixes:
-            out['noeval'] = True
-        if '|' in prefixes:
-            out['nomenu'] = True
+        if "}" in prefixes:
+            out["debug"] = True
+        if "]" in prefixes:
+            out["noeval"] = True
+        if "|" in prefixes:
+            out["nomenu"] = True
         return out
 
     def separate_prefixes(self, action: Text) -> Tuple[Text, dict]:
@@ -163,15 +170,29 @@ class TaskEntry:
             action = action[1:].squish_spaces()
         return action, self.parse_prefixes(prefixes)
 
-    async def execute_action_list(self, actions: Text, split_actions: bool = False, nobreak: bool = False, **kwargs):
+    async def execute_action_list(
+        self,
+        actions: Text,
+        split_actions: bool = False,
+        nobreak: bool = False,
+        **kwargs
+    ):
         try:
-            await self.inline(actions, split_actions=split_actions, nobreak=nobreak, **kwargs)
+            await self.inline(
+                actions, split_actions=split_actions, nobreak=nobreak, **kwargs
+            )
         except BreakQueueException as brk:
             pass
         except CPUTimeExceeded as cpu:
             pass
 
-    async def inline(self, actions: Text, split_actions: bool = False, nobreak: bool = False, **kwargs):
+    async def inline(
+        self,
+        actions: Text,
+        split_actions: bool = False,
+        nobreak: bool = False,
+        **kwargs
+    ):
         actions = actions.squish_spaces()
         if split_actions:
             while actions.startswith("{") and actions.endswith("}"):
@@ -185,7 +206,9 @@ class TaskEntry:
 
         for action in action_list:
             debug_set = set()
-            if await self.holder.controls(self, self.executor) and await self.holder.see_debug(self):
+            if await self.holder.controls(
+                self, self.executor
+            ) and await self.holder.see_debug(self):
                 debug_set.add(self.holder)
             if await self.executor.see_debug(self):
                 debug_set.add(self.executor)
@@ -195,7 +218,7 @@ class TaskEntry:
             cmd = await self.find_cmd(action)
             if cmd:
                 try:
-                    cmd.noeval = options.get('noeval', False)
+                    cmd.noeval = options.get("noeval", False)
                     await cmd.at_pre_execute()
                     await cmd.execute()
                     await cmd.at_post_execute()
@@ -227,8 +250,10 @@ class TaskEntry:
                 msg = self.task.msg
             else:
                 msg = self.task
-            if msg.cmd.lower() in ('line', 'text'):
-                actions = msg.args[0] if isinstance(msg.args[0], Text) else Text(msg.args[0])
+            if msg.cmd.lower() in ("line", "text"):
+                actions = (
+                    msg.args[0] if isinstance(msg.args[0], Text) else Text(msg.args[0])
+                )
                 await self.execute_action_list(actions)
             else:
                 pass  # This'll handle OOB data.

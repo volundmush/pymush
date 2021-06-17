@@ -143,8 +143,8 @@ class GameService(Service):
         if namespace:
             namespace = self.resolve_object(namespace)
         if namespace:
-            found, err = await self.search_objects(entry,
-                name, namespace.namespaces[type_name], exact=True, aliases=True
+            found, err = await self.search_objects(
+                entry, name, namespace.namespaces[type_name], exact=True, aliases=True
             )
             if found:
                 return (
@@ -166,8 +166,8 @@ class GameService(Service):
                 raise ValueError("All non-root_owner objects must have an Owner!")
 
         if obj_class.unique_names:
-            found, err = await self.search_objects(entry,
-                name, self.type_index[type_name], exact=True, aliases=True
+            found, err = await self.search_objects(
+                entry, name, self.type_index[type_name], exact=True, aliases=True
             )
             if found:
                 return None, f"That name is already in use by another {type_name}!"
@@ -204,8 +204,8 @@ class GameService(Service):
         self.db_objects[obj.objid] = obj
         obj.start()
 
-    def search_objects(self,
-        name, candidates: Optional[Iterable] = None, exact=False, aliases=True
+    def search_objects(
+        self, name, candidates: Optional[Iterable] = None, exact=False, aliases=True
     ):
         if candidates is None:
             candidates = self.objects.values()
@@ -219,7 +219,9 @@ class GameService(Service):
                 return found, None
         return None, f"Sorry, nothing matches: {name}"
 
-    async def create_or_join_session(self, connection: "Connection", character: "GameObject"):
+    async def create_or_join_session(
+        self, connection: "Connection", character: "GameObject"
+    ):
         if not (sess := self.sessions.get(character.dbid, None)):
             if len(connection.user.account_sessions) > connection.user.max_sessions():
                 return "Too many Sessions already in play for this User Account!"

@@ -91,7 +91,6 @@ class CreateCommand(_LoginCommand):
 
 
 class LoginCommandMatcher(PythonCommandMatcher):
-
     def at_cmdmatcher_creation(self):
         self.add(CreateCommand)
         self.add(ConnectCommand)

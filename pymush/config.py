@@ -31,7 +31,7 @@ class Config(BaseConfig):
             "attributehandler"
         ] = "pymush.db.attributes.AttributeHandler"
         self.classes["game"]["prompthandler"] = "pymush.conn.PromptHandler"
-        self.classes['game']['taskentry'] = "pymush.engine.task.TaskEntry"
+        self.classes["game"]["taskentry"] = "pymush.engine.task.TaskEntry"
         self.classes["services"]["game"] = "pymush.game.GameService"
 
         self.classes["gameobject"]["EXIT"] = "pymush.db.objects.exit.Exit"
@@ -58,7 +58,7 @@ class Config(BaseConfig):
         m["thing"] = {
             "thing": "pymush.engine.commands.thing.ThingCommandMatcher",
             "exit": "pymush.engine.commands.thing.ThingExitMatcher",
-            "roleplay": "pymush.engine.commands.roleplay.RoleplayCommandMatcher"
+            "roleplay": "pymush.engine.commands.roleplay.RoleplayCommandMatcher",
         }
 
     def _config_styles(self):
