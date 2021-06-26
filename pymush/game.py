@@ -1,9 +1,10 @@
 import asyncio
 import time
 import weakref
-
-from typing import Optional, Iterable, Union
+from uuid import UUID
+from typing import Optional, Iterable, Union, Dict
 from collections import OrderedDict, defaultdict
+from enum import IntEnum
 
 from passlib.context import CryptContext
 
@@ -13,31 +14,40 @@ from athanor.app import Service
 from athanor.utils import import_from_module
 from athanor.utils import partial_match
 
-from pymush.db.objects.base import GameObject
-
 from .utils.misc import callables_from_module
+from .db.base import GameObjectKey, QueryResult
+from .db.exceptions import DatabaseUnavailable
+from .objects.base import GameObject
+
+
+class GameStates(IntEnum):
+    LOAD = 0
+    UNLOAD = 1
 
 
 class GameService(Service):
+    states = GameStates
+
     def __init__(self, app):
         super().__init__(app)
-        self.app.game = self
-        self.objects: OrderedDict[int, GameObject] = OrderedDict()
-        self.db_objects: weakref.WeakValueDictionary[
-            str, GameObject
-        ] = weakref.WeakValueDictionary()
-        self.attributes = self.app.classes["game"]["attributemanager"](self)
+        app.game = self
         self.sessions: OrderedDict[int, "GameSession"] = OrderedDict()
         self.in_events: Optional[asyncio.Queue] = None
         self.out_events: Optional[asyncio.Queue] = None
-        self.obj_classes = self.app.classes["gameobject"]
-        self.type_index = defaultdict(weakref.WeakSet)
+        self.users: Dict[UUID, dict] = dict()
+        self.objects: Dict[UUID, dict] = dict()
         self.crypt_con = CryptContext(schemes=["argon2"])
         self.command_matchers = dict()
         self.option_classes = dict()
         self.functions = dict()
         self.update_subscribers = weakref.WeakSet()
-        self.options = self.app.config.game_options
+        self.options = app.config.game_options
+        self.queue = None
+        self.loaded = False
+
+    @property
+    def db(self):
+        return self.app.db
 
     @property
     def styles(self):
@@ -69,13 +79,55 @@ class GameService(Service):
                 raise err
 
     async def async_setup(self):
-        pass
+        self.queue = asyncio.Queue()
 
-    def serialize(self) -> dict:
-        out = dict()
-        out["objects"] = {k: v.serialize() for k, v in self.objects.items()}
-        out["attributes"] = self.attributes.serialize()
-        return out
+    async def async_run(self):
+        while (state := await self.queue.get()):
+            if state == self.states.LOAD and not self.loaded:
+                try:
+                    await self.load_game()
+                    self.loaded = True
+                except Exception as e:
+                    print(f"FAILED TO LOAD GAME!")
+                    import traceback, sys
+                    traceback.print_exc(file=sys.stdout)
+            elif state == self.states.UNLOAD and self.loaded:
+                self.loaded = False
+                await self.unload_game()
+
+    async def create_object(self, type_name: str, name: Text, register: bool = True, **kwargs) -> QueryResult:
+        result = await self.db.create_object(type_name, name, **kwargs)
+        if result.error:
+            return result
+        if register:
+            await self.register_object(result.data)
+        return result
+
+    async def register_object(self, key: GameObjectKey):
+        obj_class = self.app.classes['game']['gameobject']
+        obj = obj_class(self, key)
+        self.objects[key.uuid] = obj
+        obj.start()
+
+    async def load_game(self):
+        try:
+            obj_class = self.app.classes['game']['gameobject']
+            results = await self.db.list_objects()
+            if results.data:
+                for key in results.data:
+                    self.objects[key.uuid] = obj_class(self, key)
+                for obj in self.objects.values():
+                    obj.start()
+        except Exception as e:
+            for obj in self.objects.values():
+                obj.stop()
+            self.objects.clear()
+            raise e
+
+    async def unload_game(self):
+        for obj in self.objects.values():
+            obj.stop()
+        self.objects.clear()
 
     def locate_dbref(self, text):
         if not text.startswith("#"):
@@ -110,112 +162,37 @@ class GameService(Service):
         else:
             return None, "Invalid dbref!"
 
-    async def create_object(
-        self,
-        entry: "TaskEntry",
-        type_name: str,
-        name: str,
-        dbid: Optional[int] = None,
-        location: Union[GameObject, str, Text, int] = None,
-        no_location=False,
-        namespace: Optional[GameObject] = None,
-        owner: Optional[GameObject] = None,
+    async def find_user(self, name: Union[str, Text]):
+        if isinstance(name, Text):
+            name = name.plain
+        results = await self.db.list_users(name=name)
+        if not results.data:
+            return None
+        results = await self.db.get_user(results.data[0])
+        return results.data
+
+    async def search_objects(
+        self, name: Union[str, Text], candidates: Optional[Iterable[GameObjectKey]] = None, exact=False, aliases=True
     ):
+        if isinstance(name, Text):
+            name = name.plain
 
-        name = name.strip()
-        type_name = type_name.upper().strip()
-        if not name:
-            return None, f"Objects must have a name!"
-
-        if not self.app.config.regex["basic_name"].match(name):
-            return None, "Name contains invalid characters!"
-
-        if dbid is not None:
-            if dbid < 0:
-                return None, "DBID cannot be less than 0!"
-            if dbid in self.objects:
-                return None, f"DBID {dbid} is already in use!"
-        else:
-            dbid = 0
-            while dbid in self.objects:
-                dbid += 1
-
-        if namespace:
-            namespace = self.resolve_object(namespace)
-        if namespace:
-            found, err = await self.search_objects(
-                entry, name, namespace.namespaces[type_name], exact=True, aliases=True
-            )
-            if found:
-                return (
-                    None,
-                    f"That name is already in use by another {type_name} managed by {namespace.objid}!",
-                )
-
-        obj_class = self.obj_classes.get(type_name, None)
-        if not obj_class:
-            return None, f"{type_name} does not map to an Object Class!"
-
-        if owner:
-            owner = self.resolve_object(owner)
-
-        if owner and obj_class.is_root_owner:
-            owner = None
-        if not obj_class.is_root_owner:
-            if not owner:
-                raise ValueError("All non-root_owner objects must have an Owner!")
-
-        if obj_class.unique_names:
-            found, err = await self.search_objects(
-                entry, name, self.type_index[type_name], exact=True, aliases=True
-            )
-            if found:
-                return None, f"That name is already in use by another {type_name}!"
-
-        if no_location:
-            location = None
-        else:
-            if location:
-                orig = location
-                location = self.resolve_object(location)
-                if not location:
-                    raise ValueError(
-                        f"{orig} cannot be resolved to a GameObject for location!"
-                    )
-            else:
-                location = self.get_start_location(type_name)
-
-        now = int(time.time())
-        obj = obj_class(self, dbid, now, name)
-        self.register_obj(obj)
-
-        if namespace:
-            obj.namespace = namespace
-        if location:
-            obj.location = location
-
-        self.objects[dbid] = obj
-        return obj, None
-
-    def register_obj(self, obj: GameObject):
-        self.objects[obj.dbid] = obj
-        self.type_index[obj.type_name].add(obj)
-        self.db_objects[obj.dbref] = obj
-        self.db_objects[obj.objid] = obj
-        obj.start()
-
-    def search_objects(
-        self, name, candidates: Optional[Iterable] = None, exact=False, aliases=True
-    ):
         if candidates is None:
-            candidates = self.objects.values()
+            candidates = [obj.key for obj in self.objects.values()]
+
+        search_candidates = list()
+        for can in candidates:
+            results = await self.db.get_object(can)
+            if results.data:
+                search_candidates.append((can, results.data))
+
         name_lower = name.strip().lower()
         if exact:
-            for obj in candidates:
-                if name_lower == obj.name.lower():
+            for obj in search_candidates:
+                if name_lower == obj[1]['name'].lower():
                     return obj, None
         else:
-            if (found := partial_match(name, candidates, key=lambda x: x.name)) :
+            if (found := partial_match(name, search_candidates, key=lambda x: x[1]['name'])) :
                 return found, None
         return None, f"Sorry, nothing matches: {name}"
 

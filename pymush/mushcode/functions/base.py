@@ -4,7 +4,7 @@ from mudrich.text import Text
 
 from pymush.utils.text import to_number
 from pymush.utils import formatter as fmt
-from pymush.engine.api import BaseApi
+from ..api import BaseApi
 
 
 class BaseFunction(BaseApi):

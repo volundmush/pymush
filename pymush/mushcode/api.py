@@ -1,43 +1,35 @@
 from typing import Union, List, Tuple, Dict
 
 from mudrich.text import Text
-from pymush.db.attributes import AttributeRequestType, AttributeRequest
+from pymush.attributes import AttributeRequestType, AttributeRequest
 
 
 class BaseApi:
     @property
     def parser(self):
-        return self.entry.parser
+        return self.task.parser
 
     @property
     def game(self):
-        return self.entry.game
+        return self.task.game
 
     @property
     def executor(self):
-        return self.entry.executor
+        return self.task.executor
 
     @property
     def enactor(self):
-        return self.entry.enactor
+        return self.task.enactor
 
     @property
     def caller(self):
-        return self.entry.caller
-
-    @property
-    def session(self):
-        return self.entry.session
-
-    @property
-    def connection(self):
-        return self.entry.connection
+        return self.task.caller
 
     def send(self, *args, **kwargs):
         self.executor.send(*args, **kwargs)
 
-    def msg(self, text=None, **kwargs):
-        self.executor.msg(text=text, **kwargs)
+    def msg(self, *args, **kwargs):
+        self.executor.msg(*args, **kwargs)
 
     async def split_cmd_args(self, text: Union[str, Text]):
         escaped = False
@@ -144,7 +136,7 @@ class BaseApi:
             if not obj:
                 return None, None, "Must enter an Object to search for!"
             results, err = await self.executor.locate_object(
-                self.entry, name=obj, first_only=True
+                self.task, name=obj, first_only=True
             )
             if results:
                 obj = results[0]
@@ -163,7 +155,7 @@ class BaseApi:
             accessor=self.executor,
             req_type=AttributeRequestType.GET,
             name=attr_name,
-            entry=self.entry,
+            entry=self.task,
         )
         await obj.attributes.api_request(req)
         return req
@@ -173,7 +165,7 @@ class BaseApi:
             accessor=self.executor,
             req_type=AttributeRequestType.SET,
             name=attr_name,
-            entry=self.entry,
+            task=self.task,
             value=attr_value,
         )
         await obj.attributes.api_request(req)

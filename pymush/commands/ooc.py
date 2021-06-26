@@ -4,11 +4,11 @@ from athanor.utils import partial_match
 
 from mudrich.encodings.pennmush import ansi_fun
 
-from .base import Command, MushCommand, CommandException, PythonCommandMatcher
+from .base import Command, CommandException, PythonCommandMatcher
 from .shared import PyCommand, HelpCommand, QuitCommand
 
 
-class PennBindCommand(MushCommand):
+class PennBindCommand(Command):
     """
     Binds a character imported from PennMUSH to an Account. This is
     mostly useful for cases where a character never had an Account

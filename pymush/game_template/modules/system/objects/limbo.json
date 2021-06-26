@@ -1,0 +1,18 @@
+{
+  "name": "Limbo Dimension",
+  "prototype": ["system", "map"],
+  "rooms": [
+    {
+      "name": "The End of Time",
+      "coordinates":  [0,0,0],
+      "exits": {"n": null},
+      "description": "A rustic wooden platform floating in an endless void, dimly by a solitary lamp post."
+    },
+    {
+      "name": "The Quiet Room",
+      "coordinates": [0,1,0],
+      "exits": {"s": null},
+      "description": "A nondescript chamber floating in an endless void, fenced in by wooden railings. Not much going on here."
+    }
+  ]
+}

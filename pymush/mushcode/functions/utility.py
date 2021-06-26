@@ -1,7 +1,7 @@
 from mudrich.text import Text
 
 from pymush.utils.text import case_match
-from pymush.db.attributes import AttributeRequest, AttributeRequestType
+from pymush.attributes import AttributeRequest, AttributeRequestType
 from .base import BaseFunction
 
 

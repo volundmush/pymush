@@ -10,7 +10,7 @@ from athanor.utils import partial_match
 from pymush.utils import formatter as fmt
 from mudrich.traceback import Traceback
 
-from .base import Command, MushCommand, CommandException, PythonCommandMatcher
+from .base import Command, CommandException, PythonCommandMatcher
 
 
 class PyCommand(Command):

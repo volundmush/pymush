@@ -1,7 +1,6 @@
 import re
 
 from .base import (
-    MushCommand,
     CommandException,
     PythonCommandMatcher,
     BaseCommandMatcher,

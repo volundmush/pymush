@@ -15,6 +15,7 @@ from mudrich.console import Console
 from athanor_server.app import Application as BaseApplication
 from .game import GameService
 from .config import Config
+from .db.base import Database
 
 
 class Application(BaseApplication):
@@ -22,3 +23,4 @@ class Application(BaseApplication):
         super().__init__(config)
         self.game: Optional[GameService] = None
         self.console = Console()
+        self.db: Optional[Database] = None

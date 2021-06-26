@@ -12,6 +12,8 @@ class Config(BaseConfig):
         self.styles = defaultdict(dict)
         self.gather_modules = defaultdict(list)
         self.game_options = dict()
+        self.database_config = dict()
+        self.sqlite_fs_file = "fs.sqlite3"
 
     def setup(self):
         super().setup()
@@ -19,26 +21,18 @@ class Config(BaseConfig):
         self._config_styles()
         self._config_gather_modules()
         self._config_game_options()
+        self._config_database()
 
     def _config_classes(self):
         super()._config_classes()
         self.classes["game"]["connection"] = "pymush.conn.Connection"
         self.classes["game"]["gamesession"] = "pymush.conn.GameSession"
-        self.classes["game"][
-            "attributemanager"
-        ] = "pymush.db.attributes.AttributeManager"
-        self.classes["game"][
-            "attributehandler"
-        ] = "pymush.db.attributes.AttributeHandler"
         self.classes["game"]["prompthandler"] = "pymush.conn.PromptHandler"
-        self.classes["game"]["taskentry"] = "pymush.engine.task.TaskEntry"
+        self.classes['game']["gameobject"] = "pymush.objects.base.GameObject"
+        self.classes["tasks"]["lua"] = "pymush.lua.LuaTask"
+        self.classes["tasks"]["mush"] = "pymush.mushcode.task.MushcodeTask"
         self.classes["services"]["game"] = "pymush.game.GameService"
-
-        self.classes["gameobject"]["EXIT"] = "pymush.db.objects.exit.Exit"
-        self.classes["gameobject"]["PLAYER"] = "pymush.db.objects.player.Player"
-        self.classes["gameobject"]["ROOM"] = "pymush.db.objects.room.Room"
-        self.classes["gameobject"]["THING"] = "pymush.db.objects.thing.Thing"
-        self.classes["gameobject"]["USER"] = "pymush.db.objects.user.User"
+        self.classes["services"]["database"] = "pymush.db.tortoise.TortoiseDatabase"
 
     def _config_regex(self):
         self.regex["basic_name"] = re.compile(r"(?s)^(\w|\.|-| |'|_)+$")
@@ -46,19 +40,18 @@ class Config(BaseConfig):
 
     def _config_matchers(self):
         m = self.command_matchers
-        m["login"] = {"login": "pymush.engine.commands.login.LoginCommandMatcher"}
+        m["login"] = {"login": "pymush.commands.login.LoginCommandMatcher"}
 
-        m["ooc"] = {"ooc": "pymush.engine.commands.ooc.SelectCommandMatcher"}
+        m["ooc"] = {"ooc": "pymush.commands.ooc.SelectCommandMatcher"}
 
         m["basic"] = {
-            "ic": "pymush.engine.commands.ic.SessionCommandMatcher",
-            "script": "pymush.engine.commands.scripting.ScriptCommandMatcher",
+            "ic": "pymush.commands.ic.SessionCommandMatcher",
         }
 
         m["thing"] = {
-            "thing": "pymush.engine.commands.thing.ThingCommandMatcher",
-            "exit": "pymush.engine.commands.thing.ThingExitMatcher",
-            "roleplay": "pymush.engine.commands.roleplay.RoleplayCommandMatcher",
+            "thing": "pymush.commands.thing.ThingCommandMatcher",
+            "exit": "pymush.commands.thing.ThingExitMatcher",
+            "roleplay": "pymush.commands.roleplay.RoleplayCommandMatcher",
         }
 
     def _config_styles(self):
@@ -86,10 +79,10 @@ class Config(BaseConfig):
 
         self.gather_modules["functions"].extend(
             [
-                "pymush.engine.functions.string",
-                "pymush.engine.functions.utility",
-                "pymush.engine.functions.boolean",
-                "pymush.engine.functions.math",
+                "pymush.mushcode.functions.string",
+                "pymush.mushcode.functions.utility",
+                "pymush.mushcode.functions.boolean",
+                "pymush.mushcode.functions.math",
             ]
         )
 
@@ -103,3 +96,12 @@ class Config(BaseConfig):
         o["function_invocation_limit"] = 10000
         o["function_recursion_limit"] = 3000
         o["max_cpu_time"] = 4.0
+
+    def _config_database(self):
+        self.database_config = {
+            "db_url": "sqlite://db.sqlite3",
+            "modules": {
+                "pymush": ['pymush.db.tortoise_models']
+            },
+            "use_tz": True
+        }

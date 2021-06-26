@@ -3,9 +3,9 @@ import weakref
 import asyncio
 import sys
 import traceback
-
+from uuid import UUID
 from collections import OrderedDict, namedtuple
-from typing import Optional, Set, List, Tuple
+from typing import Optional, Set, List, Tuple, Union
 
 from mudrich.console import Console
 from mudrich.color import ColorSystem
@@ -13,6 +13,7 @@ from mudrich.console import _null_highlighter
 from mudrich.traceback import Traceback
 from mudrich import box
 from mudrich.text import Text
+from mudrich.encodings.pennmush import ansi_fun
 
 from athanor.shared import (
     ConnectionDetails,
@@ -24,11 +25,12 @@ from athanor.tasks import TaskMaster
 from athanor_server.conn import Connection as BaseConnection
 from athanor.utils import lazy_property
 
+
 from .welcome import message as WELCOME
 from .utils import formatter as fmt
 from .selectscreen import render_select_screen
 from .utils.styling import StyleHandler
-from .engine.commands.base import CommandException
+from .commands.base import CommandException
 
 
 COLOR_MAP = {
@@ -50,7 +52,7 @@ class Connection(BaseConnection):
         BaseConnection.__init__(self, service, details)
         self.connected = details.connected
         self.last_activity = self.connected
-        self.user: Optional["GameObject"] = None
+        self.user: Optional["User"] = None
         self.session: Optional["GameSession"] = None
         self.console = Console(
             color_system=COLOR_MAP[details.color] if details.color else None,
@@ -63,18 +65,6 @@ class Connection(BaseConnection):
         self.menu = None
         self.conn_style = StyleHandler(self, save=False)
         self._print_mode = "line"
-
-    @property
-    def executor(self):
-        return self
-
-    @property
-    def enactor(self):
-        return self
-
-    @property
-    def caller(self):
-        return self
 
     @property
     def style(self):
@@ -183,13 +173,12 @@ class Connection(BaseConnection):
         message.send(self)
 
     async def create_user(
-        self, entry: "TaskEntry", name: str, password: str
+        self, name: str, password: str
     ) -> Tuple[bool, Optional[Text]]:
-        pass_hash = self.game.crypt_con.hash(password)
-        user, error = await self.game.create_object(entry, "USER", name)
-        if error:
-            return False, Text(error)
-        await user.change_password(pass_hash, nohash=True)
+        try:
+            user = await self.game.users.create_user(name=name, password=password)
+        except ValueError as err:
+            return False, Text(str(err))
 
         cmd = (
             f'connect "{user.name}" <password>'
@@ -197,22 +186,19 @@ class Connection(BaseConnection):
             else f"connect {user.name} <password>"
         )
         self.msg(text="User Account created! You can login with " + ansi_fun("hw", cmd))
+        return user, None
 
     async def check_login(
-        self, name: str, password: str
+        self, name: Text, password: str
     ) -> Tuple[bool, Optional[Text]]:
-        candidates = self.game.type_index["USER"]
-        user, error = self.game.search_objects(name, candidates=candidates, exact=True)
-        if error:
-            return False, Text("Sorry, that was an incorrect username or password.")
-        if not user:
+        if not (user := await self.game.users.find_user(name=name)):
             return False, Text("Sorry, that was an incorrect username or password.")
         if not await user.check_password(password):
             return False, Text("Sorry, that was an incorrect username or password.")
         await self.login(user)
         return True, None
 
-    async def login(self, user: "GameObject"):
+    async def login(self, user: "User"):
         self.user = user
         user.last_login = time.time()
         user.connections.add(self)
@@ -319,18 +305,16 @@ class PromptHandler:
 class GameSession(TaskMaster):
     session_matchers = ("ic",)
 
-    def __init__(self, user: "GameObject", character: "GameObject"):
+    def __init__(self, user: UUID, character: "GameObject"):
         super().__init__()
-        self.user: "GameObject" = user
-        weakchar = weakref.proxy(character)
-        self.character: "GameObject" = weakchar
-        self.puppet: "GameObject" = weakchar
+        self.user: UUID = user
+        puppet = weakref.proxy(character)
+        self.character = puppet
+        self.puppet = puppet
         self.connections: Set["Connection"] = weakref.WeakSet()
         self.admin = False
         self.ending_safely = False
         self.linkdead = False
-        self.character.session = self
-        self.user.account_sessions.add(self)
         now = time.time()
         self.last_cmd = now
         self.created = now

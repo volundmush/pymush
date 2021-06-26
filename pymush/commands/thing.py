@@ -1,6 +1,5 @@
 from pymush.utils import formatter as fmt
 from .base import (
-    MushCommand,
     CommandException,
     PythonCommandMatcher,
     BaseCommandMatcher,
@@ -8,7 +7,7 @@ from .base import (
 )
 
 
-class LookCommand(MushCommand):
+class LookCommand(Command):
     name = "look"
     aliases = ["l", "lo", "loo"]
     help_category = "Interaction"
@@ -51,21 +50,11 @@ class LookCommand(MushCommand):
             raise CommandException("You are nowhere. There's not much to see.")
 
 
-class ThinkCommand(MushCommand):
-    name = "think"
-    aliases = ["th", "thi", "thin"]
-    help_category = "Misc"
-
-    async def execute(self):
-        self.enactor.msg(await self.parser.evaluate(self.args))
-
-
 class ThingCommandMatcher(PythonCommandMatcher):
     priority = 10
 
     def at_cmdmatcher_creation(self):
         self.add(LookCommand)
-        self.add(ThinkCommand)
 
 
 class ExitCommand(Command):

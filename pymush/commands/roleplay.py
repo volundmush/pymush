@@ -1,14 +1,10 @@
-import weakref
-
 from mudrich.text import Text
 from typing import Iterable
-from pymush.engine.task import BreakQueueException
-from pymush.utils.text import case_match, truthy
 
-from .base import MushCommand, CommandException, PythonCommandMatcher
+from .base import Command, PythonCommandMatcher
 
 
-class _RoleplayCommand(MushCommand):
+class _RoleplayCommand(Command):
     help_category = "Roleplay"
 
     def distribute(self, targets: Iterable["GameObject"], to_send: Text):
@@ -27,7 +23,7 @@ class _RoleplayCommand(MushCommand):
             target.receive_text(self.executor, self.interpreter, to_send)
 
 
-class SayCommand(MushCommand):
+class SayCommand(Command):
     name = "say"
 
     async def execute(self):
@@ -54,7 +50,7 @@ class SayCommand(MushCommand):
             )
 
 
-class PoseCommand(MushCommand):
+class PoseCommand(Command):
     name = "pose"
 
     async def execute(self):
@@ -78,7 +74,7 @@ class PoseCommand(MushCommand):
             )
 
 
-class SemiPoseCommand(MushCommand):
+class SemiPoseCommand(Command):
     name = "semipose"
 
     async def execute(self):

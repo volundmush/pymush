@@ -4,7 +4,7 @@ from mudrich.encodings.pennmush import ansi_fun, send_menu
 
 from pymush.utils import formatter as fmt
 
-from .base import Command, MushCommand, CommandException, PythonCommandMatcher
+from .base import Command, CommandException, PythonCommandMatcher
 from .shared import PyCommand, HelpCommand, QuitCommand
 
 

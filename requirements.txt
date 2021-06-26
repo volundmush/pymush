@@ -8,3 +8,7 @@ numpy
 scipy
 lupa
 AsyncLupa
+tortoise-orm
+python-rapidjson
+fs
+GitPython

@@ -1,18 +1,13 @@
-import re
-from typing import Union, Optional
-from enum import IntEnum
-
 from mudrich.text import Text
-
+from typing import Optional, Set, Tuple, Union
 from pymush.utils.text import find_notspace, find_matching
-
+from .commands.base import MushCommandException
 from .functions.base import NotFound as NotFoundFunction
+from pymush.task import BaseTask, CPUTimeExceeded, BreakTaskException
 
-
-class MushLex(IntEnum):
-    SPAN = 0
-    RECURSE = 1
-    SUB = 2
+import time
+from enum import IntEnum
+import re
 
 
 class MushSub(IntEnum):
@@ -52,8 +47,8 @@ class MushSub(IntEnum):
 
 
 class StackFrame:
-    def __init__(self, parser, executor, enactor, caller):
-        self.parser = parser
+    def __init__(self, task, executor, enactor, caller):
+        self.task = task
         self.parent = None
         self.break_after = False
         self.enactor = enactor
@@ -70,10 +65,6 @@ class StackFrame:
         self.localized = False
         self.vars = dict()
         self.ukeys = dict()
-
-    @property
-    def entry(self):
-        return self.parser.entry
 
     def localize(self):
         self.localized = True
@@ -189,7 +180,8 @@ class StackFrame:
         return Text("")
 
 
-class Parser:
+class MushcodeTask(BaseTask):
+    null_task = Text("")
     re_func = re.compile(r"^(?P<bangs>!|!!|!\$|!!\$|!\^|!!\^)?(?P<func>\w+)")
     re_number_args = re.compile(r"^%(?P<number>\d+)")
     re_q_reg = re.compile(r"^%q(?P<varname>\d+|[A-Z])", flags=re.IGNORECASE)
@@ -201,12 +193,24 @@ class Parser:
     re_inum = re.compile(r"^%i_(?P<num>\d+)", flags=re.IGNORECASE)
     re_numeric = re.compile(r"^(?P<neg>-)?(?P<value>\d+(?P<dec>\.\d+)?)$")
 
-    def __init__(
-        self, entry, executor: "GameObject", enactor: "GameObject", caller: "GameObject"
-    ):
-        self.entry = entry
-        f = StackFrame(parser=self, executor=executor, enactor=enactor, caller=caller)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.actions: Text = self.null_task
+        self.inline_depth = -1
+        f = StackFrame(task=self, executor=self.holder, enactor=self._original_enactor, caller=self._original_caller)
         self.stack = [f]
+
+    @property
+    def max_cpu_time(self):
+        return self.game.options.get("max_cpu_time", 4.0)
+
+    @property
+    def function_recursion_limit(self):
+        return self.game.options.get("function_recursion_limit", 3000)
+
+    @property
+    def function_invocation_limit(self):
+        return self.game.options.get("function_invocation_limit", 10000)
 
     @property
     def frame(self):
@@ -236,7 +240,7 @@ class Parser:
     ):
         cur_frame = self.frame
         new_frame = StackFrame(
-            parser=self,
+            task=self,
             enactor=enactor if enactor else self.frame.enactor,
             executor=executor if executor else self.frame.executor,
             caller=caller if caller else self.frame.caller,
@@ -545,3 +549,125 @@ class Parser:
     async def find_function(self, funcname: str, default=None):
         found = self.entry.game.functions.get(funcname.lower(), None)
         return found if found else default
+
+
+    async def get_help(self):
+        out = dict()
+        await self.holder.gather_help(self, out)
+        return out
+
+    async def find_cmd(self, action: Text):
+        return await self.holder.find_cmd(self, action)
+
+    def action_splitter(self, actions: Text):
+        plain = actions.plain
+
+        i = find_notspace(plain, 0)
+        escaped = False
+        paren_depth = 0
+        square_depth = 0
+        start_segment = i
+        curly_depth = 0
+
+        while i < len(plain):
+            if escaped:
+                escaped = False
+                continue
+            else:
+                c = plain[i]
+                if c == "\\":
+                    escaped = True
+                elif c == ";" and not (paren_depth or curly_depth or square_depth):
+                    yield actions[start_segment:i].squish_spaces()
+                    start_segment = i + 1
+                elif c == "(":
+                    paren_depth += 1
+                elif c == ")" and paren_depth:
+                    paren_depth -= 1
+                elif c == "{":
+                    curly_depth += 1
+                elif c == "}" and curly_depth:
+                    curly_depth -= 1
+                elif c == "[":
+                    square_depth += 1
+                elif c == "]" and square_depth:
+                    square_depth -= 1
+            i += 1
+
+        if i > start_segment:
+            yield actions[start_segment:i].squish_spaces()
+
+    valid_prefixes = {"}", "]", "|"}
+
+    def parse_prefixes(self, prefixes: Set[str]) -> dict:
+        out = dict()
+        if "}" in prefixes:
+            out["debug"] = True
+        if "]" in prefixes:
+            out["noeval"] = True
+        if "|" in prefixes:
+            out["nomenu"] = True
+        return out
+
+    def separate_prefixes(self, action: Text) -> Tuple[Text, dict]:
+        prefixes = set()
+        while action and action.plain[0] in self.valid_prefixes:
+            prefixes.add(action.plain[0])
+            action = action[1:].squish_spaces()
+        return action, self.parse_prefixes(prefixes)
+
+    async def do_execute(self):
+        await self.inline(self.actions)
+
+    async def inline(
+        self,
+        actions: Text,
+        nobreak: bool = False,
+        **kwargs
+    ):
+        actions = actions.squish_spaces()
+        while actions.startswith("{") and actions.endswith("}"):
+            actions = actions[1:-1].squish_spaces()
+        action_list = self.action_splitter(actions)
+
+        self.parser.enter_frame(**kwargs)
+        self.inline_depth += 1
+
+        for action in action_list:
+            debug_set = set()
+            if await self.holder.controls(
+                self, self.executor
+            ) and await self.holder.see_debug(self):
+                debug_set.add(self.holder)
+            if await self.executor.see_debug(self):
+                debug_set.add(self.executor)
+            for obj in debug_set:
+                await obj.print_debug_cmd(self, action)
+            action, options = self.separate_prefixes(action)
+            cmd = await self.find_cmd(action)
+            if cmd:
+                try:
+                    cmd.noeval = options.get("noeval", False)
+                    await cmd.at_pre_execute()
+                    await cmd.execute()
+                    await cmd.at_post_execute()
+                    after_time = time.time()
+                    if cmd.timestamp_after and self.session:
+                        self.session.last_cmd = after_time
+                    total_time = after_time - self.start_timer
+                    if total_time >= self.max_cpu_time:
+                        raise CPUTimeExceeded(total_time)
+                    if self.parser.frame.break_after:
+                        raise BreakTaskException()
+                except MushCommandException as cex:
+                    self.executor.msg(text=str(cex))
+                except BreakTaskException as br:
+                    if not nobreak:
+                        raise br
+                    else:
+                        break
+            else:
+                self.executor.msg(text='Huh?  (Type "help" for help.)')
+
+        self.parser.exit_frame()
+        self.inline_depth -= 1
